@@ -238,13 +238,11 @@ export class HeyAPIContractTestSuite {
           "GET",
           200,
           categoriesResponse.data,
-          z.object({
-            data: z.array(CategorySchema),
-          })
+          z.array(CategorySchema)
         );
 
         // Store categories for later tests
-        this.testData.categories = categoriesResponse.data.data || [];
+        this.testData.categories = categoriesResponse.data || [];
       }
 
       // POST /api/categories - Create category
@@ -309,19 +307,17 @@ export class HeyAPIContractTestSuite {
           "GET",
           200,
           ordersResponse.data,
-          z.object({
-            data: z.array(OrderWithItemsSchema),
-          })
+          z.array(OrderWithItemsSchema)
         );
 
         // Store orders for later tests
-        this.testData.orders = ordersResponse.data.data || [];
+        this.testData.orders = ordersResponse.data || [];
       }
 
       // POST /api/orders - Create order
       const createOrderData = {
         userId: this.testData.users[0]?.id || "test-user-id",
-        items: [
+        orderItems: [
           {
             productId: this.testData.products[0]?.id || "test-product-id",
             quantity: 2,
@@ -360,12 +356,12 @@ export class HeyAPIContractTestSuite {
           );
         }
 
-        // PUT /api/orders/:id - Update order status
+        // PUT /api/orders/:id/status - Update order status
         const updateOrderData = {
           status: "PROCESSING" as const,
         };
 
-        const updateOrderResponse = await api.putApiOrdersById({
+        const updateOrderResponse = await api.putApiOrdersByIdStatus({
           path: { id: orderId },
           body: updateOrderData,
           baseUrl: this.baseUrl,
@@ -373,7 +369,7 @@ export class HeyAPIContractTestSuite {
 
         if (updateOrderResponse.data) {
           contractTester.validateResponse(
-            `/api/orders/${orderId}`,
+            `/api/orders/${orderId}/status`,
             "PUT",
             200,
             updateOrderResponse.data,
@@ -395,26 +391,6 @@ export class HeyAPIContractTestSuite {
     console.log("\n👥 Testing Users endpoints with HeyAPI...");
 
     try {
-      // GET /api/users - List users
-      const usersResponse = await api.getApiUsers({
-        baseUrl: this.baseUrl,
-      });
-
-      if (usersResponse.data) {
-        contractTester.validateResponse(
-          "/api/users",
-          "GET",
-          200,
-          usersResponse.data,
-          z.object({
-            data: z.array(UserSchema),
-          })
-        );
-
-        // Store users for later tests
-        this.testData.users = usersResponse.data.data || [];
-      }
-
       // POST /api/users - Create user
       const createUserData = {
         name: "HeyAPI Test User",
@@ -436,6 +412,9 @@ export class HeyAPIContractTestSuite {
           UserSchema
         );
 
+        // Store user for later tests
+        this.testData.users.push(createUserResponse.data);
+
         // GET /api/users/:id - Get single user
         const userId = createUserResponse.data.id;
         const singleUserResponse = await api.getApiUsersById({
@@ -449,27 +428,6 @@ export class HeyAPIContractTestSuite {
             "GET",
             200,
             singleUserResponse.data,
-            UserSchema
-          );
-        }
-
-        // PUT /api/users/:id - Update user
-        const updateUserData = {
-          name: "Updated HeyAPI Test User",
-        };
-
-        const updateUserResponse = await api.putApiUsersById({
-          path: { id: userId },
-          body: updateUserData,
-          baseUrl: this.baseUrl,
-        });
-
-        if (updateUserResponse.data) {
-          contractTester.validateResponse(
-            `/api/users/${userId}`,
-            "PUT",
-            200,
-            updateUserResponse.data,
             UserSchema
           );
         }

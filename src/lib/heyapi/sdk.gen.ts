@@ -3,12 +3,6 @@
 import type { Client, Options as ClientOptions, TDataShape } from "./client";
 import { client as _heyApiClient } from "./client.gen";
 import type {
-  DeleteApiProductsByIdData,
-  DeleteApiProductsByIdErrors,
-  DeleteApiProductsByIdResponses,
-  DeleteApiUsersByIdData,
-  DeleteApiUsersByIdErrors,
-  DeleteApiUsersByIdResponses,
   GetApiCategoriesByIdData,
   GetApiCategoriesByIdErrors,
   GetApiCategoriesByIdResponses,
@@ -30,9 +24,6 @@ import type {
   GetApiUsersByIdData,
   GetApiUsersByIdErrors,
   GetApiUsersByIdResponses,
-  GetApiUsersData,
-  GetApiUsersErrors,
-  GetApiUsersResponses,
   PostApiCategoriesData,
   PostApiCategoriesErrors,
   PostApiCategoriesResponses,
@@ -45,15 +36,12 @@ import type {
   PostApiUsersData,
   PostApiUsersErrors,
   PostApiUsersResponses,
-  PutApiOrdersByIdData,
-  PutApiOrdersByIdErrors,
-  PutApiOrdersByIdResponses,
+  PutApiOrdersByIdStatusData,
+  PutApiOrdersByIdStatusErrors,
+  PutApiOrdersByIdStatusResponses,
   PutApiProductsByIdData,
   PutApiProductsByIdErrors,
   PutApiProductsByIdResponses,
-  PutApiUsersByIdData,
-  PutApiUsersByIdErrors,
-  PutApiUsersByIdResponses,
 } from "./types.gen";
 
 export type Options<
@@ -108,23 +96,6 @@ export const postApiProducts = <ThrowOnError extends boolean = false>(
       "Content-Type": "application/json",
       ...options.headers,
     },
-  });
-};
-
-/**
- * Delete a product by ID
- * Delete a specific product by its ID
- */
-export const deleteApiProductsById = <ThrowOnError extends boolean = false>(
-  options: Options<DeleteApiProductsByIdData, ThrowOnError>
-) => {
-  return (options.client ?? _heyApiClient).delete<
-    DeleteApiProductsByIdResponses,
-    DeleteApiProductsByIdErrors,
-    ThrowOnError
-  >({
-    url: "/api/products/{id}",
-    ...options,
   });
 };
 
@@ -205,8 +176,8 @@ export const postApiCategories = <ThrowOnError extends boolean = false>(
 };
 
 /**
- * Get a single category by ID
- * Retrieve a specific category by its ID
+ * Get a single category by ID with products
+ * Retrieve a specific category with all its associated products
  */
 export const getApiCategoriesById = <ThrowOnError extends boolean = false>(
   options: Options<GetApiCategoriesByIdData, ThrowOnError>
@@ -222,8 +193,8 @@ export const getApiCategoriesById = <ThrowOnError extends boolean = false>(
 };
 
 /**
- * List all orders with pagination
- * Retrieve a paginated list of orders
+ * List all orders with optional user filter
+ * Retrieve orders with optional filtering by user ID
  */
 export const getApiOrders = <ThrowOnError extends boolean = false>(
   options?: Options<GetApiOrdersData, ThrowOnError>
@@ -260,8 +231,8 @@ export const postApiOrders = <ThrowOnError extends boolean = false>(
 };
 
 /**
- * Get a single order by ID
- * Retrieve a specific order by its ID
+ * Get a single order by ID with items
+ * Retrieve a specific order with all its order items
  */
 export const getApiOrdersById = <ThrowOnError extends boolean = false>(
   options: Options<GetApiOrdersByIdData, ThrowOnError>
@@ -277,40 +248,23 @@ export const getApiOrdersById = <ThrowOnError extends boolean = false>(
 };
 
 /**
- * Update order status
+ * Update order status by ID
  * Update the status of an existing order
  */
-export const putApiOrdersById = <ThrowOnError extends boolean = false>(
-  options: Options<PutApiOrdersByIdData, ThrowOnError>
+export const putApiOrdersByIdStatus = <ThrowOnError extends boolean = false>(
+  options: Options<PutApiOrdersByIdStatusData, ThrowOnError>
 ) => {
   return (options.client ?? _heyApiClient).put<
-    PutApiOrdersByIdResponses,
-    PutApiOrdersByIdErrors,
+    PutApiOrdersByIdStatusResponses,
+    PutApiOrdersByIdStatusErrors,
     ThrowOnError
   >({
-    url: "/api/orders/{id}",
+    url: "/api/orders/{id}/status",
     ...options,
     headers: {
       "Content-Type": "application/json",
       ...options.headers,
     },
-  });
-};
-
-/**
- * List all users with pagination
- * Retrieve a paginated list of users
- */
-export const getApiUsers = <ThrowOnError extends boolean = false>(
-  options?: Options<GetApiUsersData, ThrowOnError>
-) => {
-  return (options?.client ?? _heyApiClient).get<
-    GetApiUsersResponses,
-    GetApiUsersErrors,
-    ThrowOnError
-  >({
-    url: "/api/users",
-    ...options,
   });
 };
 
@@ -336,25 +290,8 @@ export const postApiUsers = <ThrowOnError extends boolean = false>(
 };
 
 /**
- * Delete a user by ID
- * Delete a specific user by their ID
- */
-export const deleteApiUsersById = <ThrowOnError extends boolean = false>(
-  options: Options<DeleteApiUsersByIdData, ThrowOnError>
-) => {
-  return (options.client ?? _heyApiClient).delete<
-    DeleteApiUsersByIdResponses,
-    DeleteApiUsersByIdErrors,
-    ThrowOnError
-  >({
-    url: "/api/users/{id}",
-    ...options,
-  });
-};
-
-/**
- * Get a single user by ID
- * Retrieve a specific user by their ID
+ * Get user profile by ID
+ * Retrieve a user's profile information
  */
 export const getApiUsersById = <ThrowOnError extends boolean = false>(
   options: Options<GetApiUsersByIdData, ThrowOnError>
@@ -366,26 +303,5 @@ export const getApiUsersById = <ThrowOnError extends boolean = false>(
   >({
     url: "/api/users/{id}",
     ...options,
-  });
-};
-
-/**
- * Update a user by ID
- * Update an existing user's information
- */
-export const putApiUsersById = <ThrowOnError extends boolean = false>(
-  options: Options<PutApiUsersByIdData, ThrowOnError>
-) => {
-  return (options.client ?? _heyApiClient).put<
-    PutApiUsersByIdResponses,
-    PutApiUsersByIdErrors,
-    ThrowOnError
-  >({
-    url: "/api/users/{id}",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
   });
 };

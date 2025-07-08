@@ -2,46 +2,20 @@
 
 export type User = {
   id: string;
-  email: string;
   name: string;
+  email: string;
+  picture: string;
   createdAt: string;
   updatedAt: string;
-};
-
-export type CreateUserRequest = {
-  email: string;
-  name: string;
-  password?: string;
-};
-
-export type UpdateUserRequest = {
-  name?: string;
-  email?: string;
-};
-
-export type UserListResponse = {
-  data?: Array<User>;
-  page?: number;
-  pageSize?: number;
-  total?: number;
-  totalPages?: number;
 };
 
 export type Category = {
   id: string;
   name: string;
   description?: string;
+  products?: Array<Product>;
   createdAt: string;
   updatedAt: string;
-};
-
-export type CreateCategoryRequest = {
-  name: string;
-  description?: string;
-};
-
-export type CategoryListResponse = {
-  data?: Array<Category>;
 };
 
 export type Product = {
@@ -50,34 +24,32 @@ export type Product = {
   description?: string;
   price: number;
   stockQuantity: number;
-  categoryId: string;
   category?: Category;
+  categoryId: string;
   createdAt: string;
   updatedAt: string;
 };
 
-export type CreateProductRequest = {
-  name: string;
-  description?: string;
-  price: number;
-  stockQuantity: number;
-  categoryId: string;
+export type Order = {
+  id: string;
+  user?: User;
+  userId: string;
+  status: OrderStatus;
+  totalAmount: number;
+  orderItems?: Array<OrderItem>;
+  createdAt: string;
+  updatedAt: string;
 };
 
-export type UpdateProductRequest = {
-  name?: string;
-  description?: string;
-  price?: number;
-  stockQuantity?: number;
-  categoryId?: string;
-};
-
-export type ProductListResponse = {
-  data?: Array<Product>;
-  page?: number;
-  pageSize?: number;
-  total?: number;
-  totalPages?: number;
+export type OrderItem = {
+  id: string;
+  orderId: string;
+  product?: Product;
+  productId: string;
+  quantity: number;
+  priceAtTime: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type OrderStatus =
@@ -87,54 +59,11 @@ export type OrderStatus =
   | "DELIVERED"
   | "CANCELLED";
 
-export type OrderItem = {
-  id: string;
-  orderId: string;
-  productId: string;
-  quantity: number;
-  price: number;
-  product?: Product;
-};
-
-export type Order = {
-  id: string;
-  userId: string;
-  status: OrderStatus;
-  total: number;
-  user?: User;
-  items?: Array<OrderItem>;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type CreateOrderRequest = {
-  userId: string;
-  items: Array<CreateOrderItemRequest>;
-};
-
-export type CreateOrderItemRequest = {
-  productId: string;
-  quantity: number;
-};
-
-export type UpdateOrderRequest = {
-  status: OrderStatus;
-};
-
-export type OrderListResponse = {
-  data?: Array<Order>;
-  page?: number;
-  pageSize?: number;
-  total?: number;
-  totalPages?: number;
-};
-
 export type _Error = {
-  message: string;
-  code?: string;
-  details?: {
-    [key: string]: unknown;
-  };
+  /**
+   * Error message
+   */
+  error: string;
 };
 
 export type GetApiProductsData = {
@@ -142,11 +71,11 @@ export type GetApiProductsData = {
   path?: never;
   query?: {
     /**
-     * Page number (default 1)
+     * Page number (default: 1)
      */
     page?: number;
     /**
-     * Number of items per page (default 10)
+     * Number of items per page (default: 10)
      */
     pageSize?: number;
   };
@@ -166,14 +95,26 @@ export type GetApiProductsResponses = {
   /**
    * Successful response
    */
-  200: ProductListResponse;
+  200: {
+    data?: Array<Product>;
+    page?: number;
+    pageSize?: number;
+    total?: number;
+    totalPages?: number;
+  };
 };
 
 export type GetApiProductsResponse =
   GetApiProductsResponses[keyof GetApiProductsResponses];
 
 export type PostApiProductsData = {
-  body: CreateProductRequest;
+  body: {
+    name: string;
+    description?: string;
+    price: number;
+    stockQuantity: number;
+    categoryId: string;
+  };
   path?: never;
   query?: never;
   url: "/api/products";
@@ -201,42 +142,6 @@ export type PostApiProductsResponses = {
 
 export type PostApiProductsResponse =
   PostApiProductsResponses[keyof PostApiProductsResponses];
-
-export type DeleteApiProductsByIdData = {
-  body?: never;
-  path: {
-    /**
-     * Product ID
-     */
-    id: string;
-  };
-  query?: never;
-  url: "/api/products/{id}";
-};
-
-export type DeleteApiProductsByIdErrors = {
-  /**
-   * Product not found
-   */
-  404: _Error;
-  /**
-   * Internal server error
-   */
-  500: _Error;
-};
-
-export type DeleteApiProductsByIdError =
-  DeleteApiProductsByIdErrors[keyof DeleteApiProductsByIdErrors];
-
-export type DeleteApiProductsByIdResponses = {
-  /**
-   * Product deleted successfully
-   */
-  204: void;
-};
-
-export type DeleteApiProductsByIdResponse =
-  DeleteApiProductsByIdResponses[keyof DeleteApiProductsByIdResponses];
 
 export type GetApiProductsByIdData = {
   body?: never;
@@ -275,7 +180,13 @@ export type GetApiProductsByIdResponse =
   GetApiProductsByIdResponses[keyof GetApiProductsByIdResponses];
 
 export type PutApiProductsByIdData = {
-  body: UpdateProductRequest;
+  body: {
+    name?: string;
+    description?: string;
+    price?: number;
+    stockQuantity?: number;
+    categoryId?: string;
+  };
   path: {
     /**
      * Product ID
@@ -330,14 +241,17 @@ export type GetApiCategoriesResponses = {
   /**
    * Successful response
    */
-  200: CategoryListResponse;
+  200: Array<Category>;
 };
 
 export type GetApiCategoriesResponse =
   GetApiCategoriesResponses[keyof GetApiCategoriesResponses];
 
 export type PostApiCategoriesData = {
-  body: CreateCategoryRequest;
+  body: {
+    name: string;
+    description?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/categories";
@@ -395,7 +309,7 @@ export type GetApiCategoriesByIdError =
 
 export type GetApiCategoriesByIdResponses = {
   /**
-   * Category found
+   * Category found with products
    */
   200: Category;
 };
@@ -408,13 +322,9 @@ export type GetApiOrdersData = {
   path?: never;
   query?: {
     /**
-     * Page number (default 1)
+     * Filter orders by user ID
      */
-    page?: number;
-    /**
-     * Number of items per page (default 10)
-     */
-    pageSize?: number;
+    userId?: string;
   };
   url: "/api/orders";
 };
@@ -432,13 +342,19 @@ export type GetApiOrdersResponses = {
   /**
    * Successful response
    */
-  200: OrderListResponse;
+  200: Array<Order>;
 };
 
 export type GetApiOrdersResponse = GetApiOrdersResponses[keyof GetApiOrdersResponses];
 
 export type PostApiOrdersData = {
-  body: CreateOrderRequest;
+  body: {
+    userId: string;
+    orderItems: Array<{
+      productId: string;
+      quantity: number;
+    }>;
+  };
   path?: never;
   query?: never;
   url: "/api/orders";
@@ -493,7 +409,7 @@ export type GetApiOrdersByIdError = GetApiOrdersByIdErrors[keyof GetApiOrdersByI
 
 export type GetApiOrdersByIdResponses = {
   /**
-   * Order found
+   * Order found with items
    */
   200: Order;
 };
@@ -501,8 +417,10 @@ export type GetApiOrdersByIdResponses = {
 export type GetApiOrdersByIdResponse =
   GetApiOrdersByIdResponses[keyof GetApiOrdersByIdResponses];
 
-export type PutApiOrdersByIdData = {
-  body: UpdateOrderRequest;
+export type PutApiOrdersByIdStatusData = {
+  body: {
+    status: OrderStatus;
+  };
   path: {
     /**
      * Order ID
@@ -510,10 +428,14 @@ export type PutApiOrdersByIdData = {
     id: string;
   };
   query?: never;
-  url: "/api/orders/{id}";
+  url: "/api/orders/{id}/status";
 };
 
-export type PutApiOrdersByIdErrors = {
+export type PutApiOrdersByIdStatusErrors = {
+  /**
+   * Bad request - invalid status
+   */
+  400: _Error;
   /**
    * Order not found
    */
@@ -524,54 +446,26 @@ export type PutApiOrdersByIdErrors = {
   500: _Error;
 };
 
-export type PutApiOrdersByIdError = PutApiOrdersByIdErrors[keyof PutApiOrdersByIdErrors];
+export type PutApiOrdersByIdStatusError =
+  PutApiOrdersByIdStatusErrors[keyof PutApiOrdersByIdStatusErrors];
 
-export type PutApiOrdersByIdResponses = {
+export type PutApiOrdersByIdStatusResponses = {
   /**
-   * Order updated successfully
+   * Order status updated successfully
    */
   200: Order;
 };
 
-export type PutApiOrdersByIdResponse =
-  PutApiOrdersByIdResponses[keyof PutApiOrdersByIdResponses];
-
-export type GetApiUsersData = {
-  body?: never;
-  path?: never;
-  query?: {
-    /**
-     * Page number (default 1)
-     */
-    page?: number;
-    /**
-     * Number of items per page (default 10)
-     */
-    pageSize?: number;
-  };
-  url: "/api/users";
-};
-
-export type GetApiUsersErrors = {
-  /**
-   * Internal server error
-   */
-  500: _Error;
-};
-
-export type GetApiUsersError = GetApiUsersErrors[keyof GetApiUsersErrors];
-
-export type GetApiUsersResponses = {
-  /**
-   * Successful response
-   */
-  200: UserListResponse;
-};
-
-export type GetApiUsersResponse = GetApiUsersResponses[keyof GetApiUsersResponses];
+export type PutApiOrdersByIdStatusResponse =
+  PutApiOrdersByIdStatusResponses[keyof PutApiOrdersByIdStatusResponses];
 
 export type PostApiUsersData = {
-  body: CreateUserRequest;
+  body: {
+    name: string;
+    email: string;
+    password?: string;
+    picture?: string;
+  };
   path?: never;
   query?: never;
   url: "/api/users";
@@ -582,6 +476,10 @@ export type PostApiUsersErrors = {
    * Bad request - validation error
    */
   400: _Error;
+  /**
+   * Conflict - email already exists
+   */
+  409: _Error;
   /**
    * Internal server error
    */
@@ -598,42 +496,6 @@ export type PostApiUsersResponses = {
 };
 
 export type PostApiUsersResponse = PostApiUsersResponses[keyof PostApiUsersResponses];
-
-export type DeleteApiUsersByIdData = {
-  body?: never;
-  path: {
-    /**
-     * User ID
-     */
-    id: string;
-  };
-  query?: never;
-  url: "/api/users/{id}";
-};
-
-export type DeleteApiUsersByIdErrors = {
-  /**
-   * User not found
-   */
-  404: _Error;
-  /**
-   * Internal server error
-   */
-  500: _Error;
-};
-
-export type DeleteApiUsersByIdError =
-  DeleteApiUsersByIdErrors[keyof DeleteApiUsersByIdErrors];
-
-export type DeleteApiUsersByIdResponses = {
-  /**
-   * User deleted successfully
-   */
-  204: void;
-};
-
-export type DeleteApiUsersByIdResponse =
-  DeleteApiUsersByIdResponses[keyof DeleteApiUsersByIdResponses];
 
 export type GetApiUsersByIdData = {
   body?: never;
@@ -662,48 +524,13 @@ export type GetApiUsersByIdError = GetApiUsersByIdErrors[keyof GetApiUsersByIdEr
 
 export type GetApiUsersByIdResponses = {
   /**
-   * User found
+   * User profile found
    */
   200: User;
 };
 
 export type GetApiUsersByIdResponse =
   GetApiUsersByIdResponses[keyof GetApiUsersByIdResponses];
-
-export type PutApiUsersByIdData = {
-  body: UpdateUserRequest;
-  path: {
-    /**
-     * User ID
-     */
-    id: string;
-  };
-  query?: never;
-  url: "/api/users/{id}";
-};
-
-export type PutApiUsersByIdErrors = {
-  /**
-   * User not found
-   */
-  404: _Error;
-  /**
-   * Internal server error
-   */
-  500: _Error;
-};
-
-export type PutApiUsersByIdError = PutApiUsersByIdErrors[keyof PutApiUsersByIdErrors];
-
-export type PutApiUsersByIdResponses = {
-  /**
-   * User updated successfully
-   */
-  200: User;
-};
-
-export type PutApiUsersByIdResponse =
-  PutApiUsersByIdResponses[keyof PutApiUsersByIdResponses];
 
 export type ClientOptions = {
   baseUrl: "http://localhost:3000" | "https://api.catalyst.com" | (string & {});
