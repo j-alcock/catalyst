@@ -89,6 +89,22 @@ npx tsx src/lib/testing/run-contract-tests.ts
 
 The contract tests cover all major endpoints (users, products, categories, orders) and both success and error scenarios.
 
+### HeyAPI Contract Tests
+
+To run contract tests using the HeyAPI-generated TypeScript client:
+
+```bash
+npm run test:heyapi
+```
+
+This test suite uses the HeyAPI client generated from your OpenAPI specification to:
+- Test all API endpoints with proper TypeScript types
+- Validate request/response schemas
+- Test error scenarios and edge cases
+- Ensure type safety throughout the testing process
+
+The HeyAPI tests provide additional confidence that your API implementation matches the OpenAPI specification exactly.
+
 ### Contract Violation Tests
 
 To demonstrate that your contract testing framework correctly identifies API contract violations:

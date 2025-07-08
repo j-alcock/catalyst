@@ -105,3 +105,8 @@ jobs:
         env:
           API_BASE_URL: http://localhost:3000
         continue-on-error: true
+
+      - name: Run HeyAPI contract tests
+        run: npm run test:heyapi
+        env:
+          API_BASE_URL: http://localhost:3000
