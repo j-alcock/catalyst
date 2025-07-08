@@ -17,8 +17,8 @@ export async function POST(req: Request) {
       sig,
       conf.stripeWebhookSecret
     );
-  } catch (err: any) {
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+  } catch (_err: any) {
+    return new Response(`Webhook Error: ${_err.message}`, { status: 400 });
   }
 
   switch (event.type) {

@@ -8,20 +8,26 @@ generator client {
   provider = "prisma-client-js"
 }
 
+generator openapi {
+  provider = "prisma-openapi"
+  output   = "../src/lib/openapi"
+}
+
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
 model User {
   @@map("users")
 
-  id              Int      @id @default(autoincrement())
+  id              String   @id @default(cuid())
   name            String
-  email           String @unique
+  email           String   @unique
   password        String?
   picture         String
   notifications   Notification[]
+  orders          Order[]
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 }
@@ -29,15 +35,78 @@ model User {
 model Notification {
   @@map("notifications")
 
-  id                Int      @id @default(autoincrement())
+  id                String   @id @default(cuid())
   type              String
   title             String
   content           String
   link              String?
-  read              Boolean @default(false)
-  archived          Boolean @default(false)
+  read              Boolean  @default(false)
+  archived          Boolean  @default(false)
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId            Int      @map("user_id")
+  userId            String   @map("user_id")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 }
+
+model Category {
+  @@map("categories")
+
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+}
+
+model Product {
+  @@map("products")
+
+  id             String      @id @default(cuid())
+  name           String
+  description    String?
+  price          Decimal     @db.Decimal(10, 2)
+  stockQuantity  Int         @map("stock_quantity")
+  category       Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId     String      @map("category_id")
+  orderItems     OrderItem[]
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+}
+
+model Order {
+  @@map("orders")
+
+  id          String      @id @default(cuid())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String      @map("user_id")
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal     @db.Decimal(10, 2) @map("total_amount")
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+}
+
+model OrderItem {
+  @@map("order_items")
+
+  id           String   @id @default(cuid())
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId      String   @map("order_id")
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId    String   @map("product_id")
+  quantity     Int
+  priceAtTime  Decimal  @db.Decimal(10, 2) @map("price_at_time")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+

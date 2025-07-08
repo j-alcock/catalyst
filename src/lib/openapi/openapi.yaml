@@ -1,0 +1,232 @@
+openapi: 3.1.0
+info:
+  title: Prisma API
+  description: ""
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        picture:
+          type: string
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - email
+        - picture
+        - notifications
+        - orders
+        - createdAt
+        - updatedAt
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        link:
+          type: string
+        read:
+          type: boolean
+        archived:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/User"
+        userId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - title
+        - content
+        - read
+        - archived
+        - user
+        - userId
+        - createdAt
+        - updatedAt
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - products
+        - createdAt
+        - updatedAt
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: double
+        stockQuantity:
+          type: integer
+          format: int32
+        category:
+          $ref: "#/components/schemas/Category"
+        categoryId:
+          type: string
+        orderItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - price
+        - stockQuantity
+        - category
+        - categoryId
+        - orderItems
+        - createdAt
+        - updatedAt
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+        userId:
+          type: string
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        totalAmount:
+          type: number
+          format: double
+        orderItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - user
+        - userId
+        - status
+        - totalAmount
+        - orderItems
+        - createdAt
+        - updatedAt
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+        order:
+          $ref: "#/components/schemas/Order"
+        orderId:
+          type: string
+        product:
+          $ref: "#/components/schemas/Product"
+        productId:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+        priceAtTime:
+          type: number
+          format: double
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - order
+        - orderId
+        - product
+        - productId
+        - quantity
+        - priceAtTime
+        - createdAt
+        - updatedAt
+    OrderStatus:
+      type: string
+      enum:
+        - PENDING
+        - PROCESSING
+        - SHIPPED
+        - DELIVERED
+        - CANCELLED
+  responses: {}
+  parameters: {}
+  examples: {}
+  requestBodies: {}
+  headers: {}
+  securitySchemes: {}
+  links: {}
+  callbacks: {}
+tags: []
+servers: []

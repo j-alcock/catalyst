@@ -67,6 +67,49 @@ You can start editing the page by modifying [`src/app/(public)/page.tsx`](<src/a
 
 This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
 
+## Contract Testing
+
+This project includes a contract test suite that validates your API implementation against the OpenAPI specification using the HeyAPI-generated client and types.
+
+### Running Contract Tests
+
+To run all contract tests:
+
+```bash
+npm run test:contract
+```
+
+This will execute all contract tests in `src/lib/testing/run-contract-tests.ts` and print a summary of results. The process will exit with a nonzero code if any contract is broken.
+
+You can also run the test runner directly with:
+
+```bash
+npx tsx src/lib/testing/run-contract-tests.ts
+```
+
+The contract tests cover all major endpoints (users, products, categories, orders) and both success and error scenarios.
+
+### Contract Violation Tests
+
+To demonstrate that your contract testing framework correctly identifies API contract violations:
+
+```bash
+npm run test:violations
+```
+
+This test suite is designed to **FAIL** when the API contract is broken, demonstrating how the framework catches various types of violations:
+
+- **Missing Required Fields**: Tests fail when API responses are missing required fields
+- **Wrong Data Types**: Tests fail when API returns incorrect data types (e.g., string instead of number)
+- **Extra Fields**: Tests fail when API returns unexpected fields (using strict validation)
+- **Missing Endpoints**: Tests fail when expected endpoints don't exist
+- **Wrong HTTP Status Codes**: Tests fail when API returns unexpected status codes
+- **Invalid Response Structure**: Tests fail when API returns wrong response structure
+- **Wrong Enum Values**: Tests fail when API returns invalid enum values
+- **Missing Pagination Fields**: Tests fail when pagination fields are missing
+
+**Note**: These tests are designed to detect violations, so they should fail when contracts are broken. A successful run means violations were detected, which is the expected behavior.
+
 ## Database
 
 The Catalyst starter kit uses Prisma to interact with the database. By default, it uses PostgreSQL as the database engine.
@@ -113,8 +156,31 @@ All of these environment variables have placeholders if you copied the [`.env.sa
 
 ## CI/CD
 
-This project uses GitHub Actions for continuous integration and deployment. An example workflow is defined in [`.github/workflows/build.yml`](.github/workflows/build.yml).
-It installs the dependencies, lints the code, and builds the project.
+This project uses GitHub Actions for continuous integration and deployment with comprehensive contract testing.
+
+### Automated Testing
+
+The CI pipeline includes:
+
+- **Build & Lint**: Code quality checks and project building
+- **Contract Tests**: API contract validation against OpenAPI specification
+- **Contract Violation Tests**: Verification that contract violations are detected
+- **Integration Tests**: End-to-end testing with coverage reporting
+
+### Workflows
+
+- **Build & Test** (`.github/workflows/build.yml`): Runs on every push and PR
+- **Contract Tests** (`.github/workflows/contract-tests.yml`): Dedicated contract testing with PR comments
+
+### PR Integration
+
+When you create a pull request:
+1. ✅ Contract tests run automatically
+2. 📝 Results are posted as PR comments
+3. 🚫 PR cannot be merged if contract tests fail
+4. 📦 Test artifacts are uploaded for debugging
+
+For detailed CI/CD documentation, see [`.github/workflows/README.md`](.github/workflows/README.md).
 
 ## SEO
 

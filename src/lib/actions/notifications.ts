@@ -5,7 +5,7 @@ import "server-only";
 import { getUserFromSession } from "@/lib/dao/users";
 import prisma from "@/lib/prisma/prisma";
 
-export async function readNotification(notificationId: number): Promise<void> {
+export async function readNotification(notificationId: string): Promise<void> {
   const user = await getUserFromSession();
 
   await prisma.notification.update({
@@ -19,7 +19,7 @@ export async function readNotification(notificationId: number): Promise<void> {
   });
 }
 
-export async function readNotifications(notificationIds: number[]): Promise<void> {
+export async function readNotifications(notificationIds: string[]): Promise<void> {
   const user = await getUserFromSession();
 
   await prisma.notification.updateMany({

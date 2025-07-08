@@ -2,7 +2,7 @@ import "server-only";
 
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma/prisma";
-import { User } from "@prisma/client";
+
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
@@ -18,17 +18,17 @@ export async function getUserByEmail(email: string) {
   return user;
 }
 
-export const getUserIdFromSession = cache(async (): Promise<number> => {
+export const getUserIdFromSession = cache(async (): Promise<string> => {
   const session = await auth();
 
   if (!session || !session.user || !session.user.id) {
     return redirect(unauthenticatedRedirect);
   }
 
-  return parseInt(session.user.id);
+  return session.user.id;
 });
 
-export const getUserFromSession = cache(async (): Promise<Partial<User>> => {
+export const getUserFromSession = cache(async () => {
   const session = await auth();
 
   if (!session) {
