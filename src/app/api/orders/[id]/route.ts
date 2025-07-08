@@ -7,9 +7,12 @@ import { NextRequest, NextResponse } from "next/server";
  *   get:
  *     summary: Get a single order by ID with items
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const order = await prisma.order.findUnique({
       where: { id },
       include: {

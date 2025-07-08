@@ -9,9 +9,12 @@ import { NextRequest, NextResponse } from "next/server";
  *   put:
  *     summary: Update a product by ID
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const product = await prisma.product.findUnique({
       where: { id },
       include: { category: true },
@@ -25,9 +28,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const { name, description, price, stockQuantity, categoryId } = body;
     const data: any = {};

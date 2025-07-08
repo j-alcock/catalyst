@@ -7,9 +7,12 @@ import { NextRequest, NextResponse } from "next/server";
  *   get:
  *     summary: Get a user profile by ID
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const user = await prisma.user.findUnique({
       where: { id },
       select: {

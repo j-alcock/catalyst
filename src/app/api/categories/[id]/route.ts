@@ -7,9 +7,12 @@ import { NextRequest, NextResponse } from "next/server";
  *   get:
  *     summary: Get a single category by ID with products
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const category = await prisma.category.findUnique({
       where: { id },
       include: { products: true },

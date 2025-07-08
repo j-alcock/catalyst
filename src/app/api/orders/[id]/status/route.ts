@@ -7,9 +7,12 @@ import { NextRequest, NextResponse } from "next/server";
  *   put:
  *     summary: Update order status by ID
  */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const { status } = body;
 
