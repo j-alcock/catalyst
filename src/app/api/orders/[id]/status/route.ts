@@ -1,3 +1,4 @@
+import { serializePrismaObject } from "@/lib/prisma-utils";
 import prisma from "@/lib/prisma/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -11,44 +12,22 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const { id } = await params;
     const body = await req.json();
     const { status } = body;
-
-    const validStatuses = ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"];
-    if (!status || !validStatuses.includes(status)) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid status. Must be one of: PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED",
-        },
-        { status: 400 }
-      );
-    }
-
-    const updatedOrder = await prisma.order.update({
+    const order = await prisma.order.update({
       where: { id },
       data: { status },
       include: {
-        user: {
-          select: { id: true, name: true, email: true },
-        },
-        orderItems: {
-          include: {
-            product: {
-              select: { id: true, name: true, price: true },
-            },
-          },
-        },
+        user: { select: { id: true, name: true, email: true } },
+        orderItems: { include: { product: true } },
       },
     });
-
-    return NextResponse.json(updatedOrder);
-  } catch (_error: any) {
-    if (_error.code === "P2025") {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    }
+    // Serialize Decimal fields to strings
+    const serializedOrder = serializePrismaObject(order);
+    return NextResponse.json(serializedOrder);
+  } catch (_error) {
     return NextResponse.json({ error: "Failed to update order status" }, { status: 500 });
   }
 }

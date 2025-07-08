@@ -11,9 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function GET(_req: NextRequest) {
   try {
-    const categories = await prisma.category.findMany({
-      orderBy: { createdAt: "desc" },
-    });
+    const categories = await prisma.category.findMany();
     return NextResponse.json(categories);
   } catch (_error) {
     return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });
@@ -31,10 +29,7 @@ export async function POST(req: NextRequest) {
       );
     }
     const category = await prisma.category.create({
-      data: {
-        name,
-        description: description || "",
-      },
+      data: { name, description },
     });
     return NextResponse.json(category, { status: 201 });
   } catch (_error) {

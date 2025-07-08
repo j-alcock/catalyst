@@ -1,3 +1,4 @@
+import { serializePrismaObject } from "@/lib/prisma-utils";
 import prisma from "@/lib/prisma/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -25,8 +26,12 @@ export async function GET(req: NextRequest) {
       }),
       prisma.product.count(),
     ]);
+
+    // Serialize Decimal fields to strings
+    const serializedProducts = serializePrismaObject(products);
+
     return NextResponse.json({
-      data: products,
+      data: serializedProducts,
       page,
       pageSize,
       total,
@@ -60,8 +65,13 @@ export async function POST(req: NextRequest) {
         stockQuantity,
         categoryId,
       },
+      include: { category: true },
     });
-    return NextResponse.json(product, { status: 201 });
+
+    // Serialize Decimal fields to strings
+    const serializedProduct = serializePrismaObject(product);
+
+    return NextResponse.json(serializedProduct, { status: 201 });
   } catch (_error) {
     return NextResponse.json({ error: "Failed to create product" }, { status: 500 });
   }

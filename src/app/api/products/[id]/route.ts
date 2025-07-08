@@ -1,3 +1,4 @@
+import { serializePrismaObject, toDecimal } from "@/lib/prisma-utils";
 import prisma from "@/lib/prisma/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -13,8 +14,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const { id } = await params;
     const product = await prisma.product.findUnique({
       where: { id },
       include: { category: true },
@@ -22,7 +23,9 @@ export async function GET(
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
-    return NextResponse.json(product);
+    // Serialize Decimal fields to strings
+    const serializedProduct = serializePrismaObject(product);
+    return NextResponse.json(serializedProduct);
   } catch (_error) {
     return NextResponse.json({ error: "Failed to fetch product" }, { status: 500 });
   }
@@ -32,25 +35,25 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const { id } = await params;
     const body = await req.json();
     const { name, description, price, stockQuantity, categoryId } = body;
-    const data: any = {};
-    if (name !== undefined) data.name = name;
-    if (description !== undefined) data.description = description;
-    if (price !== undefined) data.price = price;
-    if (stockQuantity !== undefined) data.stockQuantity = stockQuantity;
-    if (categoryId !== undefined) data.categoryId = categoryId;
-    const updated = await prisma.product.update({
+    const product = await prisma.product.update({
       where: { id },
-      data,
+      data: {
+        name,
+        description,
+        price: price ? toDecimal(price) : undefined,
+        stockQuantity,
+        categoryId,
+      },
+      include: { category: true },
     });
-    return NextResponse.json(updated);
-  } catch (_error: any) {
-    if (_error.code === "P2025") {
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
-    }
+    // Serialize Decimal fields to strings
+    const serializedProduct = serializePrismaObject(product);
+    return NextResponse.json(serializedProduct);
+  } catch (_error) {
     return NextResponse.json({ error: "Failed to update product" }, { status: 500 });
   }
 }

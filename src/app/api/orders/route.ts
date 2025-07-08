@@ -1,3 +1,4 @@
+import { serializePrismaObject, toDecimal } from "@/lib/prisma-utils";
 import prisma from "@/lib/prisma/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -18,20 +19,24 @@ export async function GET(req: NextRequest) {
     const orders = await prisma.order.findMany({
       where,
       include: {
-        user: {
-          select: { id: true, name: true, email: true },
-        },
+        user: true,
         orderItems: {
           include: {
             product: {
-              select: { id: true, name: true, price: true },
+              include: {
+                category: true,
+              },
             },
           },
         },
       },
       orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json(orders);
+
+    // Serialize Decimal fields to strings
+    const serializedOrders = serializePrismaObject(orders);
+
+    return NextResponse.json(serializedOrders);
   } catch (_error) {
     return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
   }
@@ -73,19 +78,24 @@ export async function POST(req: NextRequest) {
     const order = await prisma.order.create({
       data: {
         userId,
-        totalAmount,
+        totalAmount: toDecimal(totalAmount),
         orderItems: {
           create: orderItems.map((item: any) => ({
             productId: item.productId,
             quantity: item.quantity,
-            priceAtTime: item.priceAtTime || 0, // Will be set to actual product price
+            priceAtTime: toDecimal(item.priceAtTime || 0), // Will be set to actual product price
           })),
         },
       },
       include: {
+        user: true,
         orderItems: {
           include: {
-            product: true,
+            product: {
+              include: {
+                category: true,
+              },
+            },
           },
         },
       },
@@ -103,7 +113,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json(order, { status: 201 });
+    // Serialize Decimal fields to strings
+    const serializedOrder = serializePrismaObject(order);
+
+    return NextResponse.json(serializedOrder, { status: 201 });
   } catch (_error) {
     return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
   }

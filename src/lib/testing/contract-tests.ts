@@ -103,7 +103,8 @@ export class ContractTestSuite {
       description: "A test product for contract testing",
       price: 29.99,
       stockQuantity: 100,
-      categoryId: this.testData.categories[0]?.id || "test-category-id",
+      categoryId:
+        this.testData.categories[0]?.id || "07773557-0bbf-425d-8437-727c4da43d12", // Use actual category ID
     };
 
     const createProductResponse = await request(this.baseUrl)
@@ -300,7 +301,7 @@ export class ContractTestSuite {
     // POST /api/users - Create user
     const createUserData = {
       name: "Test User",
-      email: "test.user@example.com",
+      email: `test.user.${Date.now()}@example.com`, // Make email unique
       picture: "https://example.com/avatar.jpg",
     };
 

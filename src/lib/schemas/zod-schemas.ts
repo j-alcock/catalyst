@@ -30,7 +30,7 @@ export const ProductSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   description: z.string().nullable(),
-  price: z.number().positive(),
+  price: z.string(),
   stockQuantity: z.number().int().min(0),
   categoryId: z.string().uuid(),
   createdAt: z.string().datetime(),
@@ -42,7 +42,7 @@ export const OrderItemSchema = z.object({
   orderId: z.string().uuid(),
   productId: z.string().uuid(),
   quantity: z.number().int().positive(),
-  priceAtTime: z.number().positive(),
+  priceAtTime: z.string(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -51,7 +51,7 @@ export const OrderSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   status: OrderStatusSchema,
-  totalAmount: z.number().positive(),
+  totalAmount: z.string(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -112,7 +112,7 @@ export const CreateUserRequestSchema = z.object({
   name: z.string().min(1).max(255),
   email: z.string().email(),
   password: z.string().min(6).optional(),
-  picture: z.string().url().optional(),
+  picture: z.string().optional(),
 });
 
 export const CreateOrderRequestSchema = z.object({
