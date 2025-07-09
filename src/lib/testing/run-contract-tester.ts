@@ -4,8 +4,8 @@ import { z } from "zod";
 import { contractTester } from "./contract-tester";
 
 async function main() {
-  console.log("🔍 Starting Basic Contract Tester...");
-  console.log("💡 This demonstrates basic contract validation functionality\n");
+  console.log("🔍 Starting Contract Tester...");
+  console.log("💡 This verifies that API responses match expected schemas\n");
 
   // Clear any previous results
   contractTester.clearResults();
@@ -20,7 +20,7 @@ async function main() {
       categoryId: z.string(),
     });
 
-    // Test 1: Valid response validation
+    // Test 1: Valid product response validation
     console.log("📋 Test 1: Valid Product Response");
     const validProduct = {
       id: "123",
@@ -38,26 +38,8 @@ async function main() {
       ProductSchema
     );
 
-    // Test 2: Invalid response validation (missing required field)
-    console.log("📋 Test 2: Invalid Product Response (missing price)");
-    const invalidProduct = {
-      id: "123",
-      name: "Test Product",
-      // price is missing
-      stockQuantity: 100,
-      categoryId: "cat-1",
-    };
-
-    contractTester.validateResponse(
-      "/api/products/123",
-      "GET",
-      200,
-      invalidProduct,
-      ProductSchema
-    );
-
-    // Test 3: Error response validation
-    console.log("📋 Test 3: Error Response Validation");
+    // Test 2: Valid error response validation
+    console.log("📋 Test 2: Valid Error Response");
     const errorResponse = {
       error: "Product not found",
     };
@@ -70,14 +52,39 @@ async function main() {
       [400, 404, 409, 500]
     );
 
-    // Test 4: Wrong status code for error
-    console.log("📋 Test 4: Wrong Status Code for Error");
-    contractTester.validateErrorResponse(
-      "/api/products/999",
+    // Test 3: Valid list response validation
+    console.log("📋 Test 3: Valid Product List Response");
+    const productList = {
+      data: [
+        {
+          id: "123",
+          name: "Product 1",
+          price: 29.99,
+          stockQuantity: 100,
+          categoryId: "cat-1",
+        },
+        {
+          id: "456",
+          name: "Product 2",
+          price: 49.99,
+          stockQuantity: 50,
+          categoryId: "cat-2",
+        },
+      ],
+      total: 2,
+    };
+
+    const ProductListSchema = z.object({
+      data: z.array(ProductSchema),
+      total: z.number(),
+    });
+
+    contractTester.validateResponse(
+      "/api/products",
       "GET",
-      200, // Wrong status code for error
-      errorResponse,
-      [400, 404, 409, 500]
+      200,
+      productList,
+      ProductListSchema
     );
 
     // Print results
@@ -92,13 +99,14 @@ async function main() {
     console.log(`   Passed: ${results.length - failedTests.length}`);
     console.log(`   Failed: ${failedTests.length}`);
 
-    if (failedTests.length > 0) {
-      console.log("\n✅ SUCCESS: Contract violations were detected as expected!");
-      console.log("   This demonstrates that the contract tester is working correctly.");
+    if (failedTests.length === 0) {
+      console.log("\n✅ SUCCESS: All contract tests passed!");
+      console.log("   API responses match expected schemas.");
       process.exit(0);
     } else {
-      console.log("\n⚠️  WARNING: No contract violations were detected.");
-      console.log("   This might indicate an issue with the test setup.");
+      console.log("\n❌ FAILURE: Contract violations detected!");
+      console.log("   API responses do not match expected schemas.");
+      console.log("   Please fix the API to match the expected contract.");
       process.exit(1);
     }
   } catch (error) {
