@@ -17,7 +17,6 @@
     "migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",
     "generate:openapi": "prisma generate",
-    "test:unified": "tsx src/lib/testing/run-unified-tests.ts",
     "test:unified-contract": "tsx src/lib/testing/run-specific-tests.ts contract",
     "test:unified-violation": "tsx src/lib/testing/run-specific-tests.ts violation",
     "test:unified-all": "tsx src/lib/testing/run-specific-tests.ts both",
