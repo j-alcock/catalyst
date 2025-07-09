@@ -64,11 +64,11 @@ jobs:
           echo "Server should be running on http://localhost:3000"
         
       - name: Run Contract Tester
-        run: npx tsx src/lib/testing/contract-tester.ts
+        run: npx tsx src/lib/testing/run-contract-tester.ts
         env:
           API_BASE_URL: http://localhost:3000
         
       - name: Run Contract Violation Tests
-        run: npx tsx src/lib/testing/contract-violation-tests.ts
+        run: npx tsx src/lib/testing/run-violation-tests.ts
         env:
           API_BASE_URL: http://localhost:3000 
