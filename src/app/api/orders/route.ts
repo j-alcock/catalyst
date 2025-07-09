@@ -1,6 +1,8 @@
 import { serializePrismaObject, toDecimal } from "@/lib/prisma-utils";
 import prisma from "@/lib/prisma/prisma";
+import { CreateOrderRequestSchema, OrdersQuerySchema } from "@/lib/schemas/zod-schemas";
 import { NextRequest, NextResponse } from "next/server";
+import { ZodError, z } from "zod";
 
 /**
  * @openapi
@@ -12,10 +14,33 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const userId = searchParams.get("userId");
 
+  // Validate query parameters
+  const queryData: any = {};
+  for (const [key, value] of searchParams.entries()) {
+    if (value !== null) queryData[key] = value;
+  }
+
+  // Validate query parameters FIRST
+  let queryValidation;
   try {
-    const where = userId ? { userId } : {};
+    queryValidation = OrdersQuerySchema.parse(queryData);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Invalid query parameters", details: error.errors },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ error: "Invalid query parameters" }, { status: 400 });
+  }
+
+  // Only call Prisma if all validation passes
+  try {
+    const { userId, status } = queryValidation;
+    const where: any = {};
+    if (userId) where.userId = userId;
+    if (status) where.status = status;
     const orders = await prisma.order.findMany({
       where,
       include: {
@@ -43,15 +68,29 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Parse JSON first - this must be isolated to catch malformed JSON
+  let body;
   try {
-    const body = await req.json();
-    const { userId, orderItems } = body;
+    body = await req.json();
+  } catch (_jsonError) {
+    return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
+  }
 
-    if (!userId || !orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
-      return NextResponse.json(
-        { error: "Missing or invalid required fields" },
-        { status: 400 }
-      );
+  // Validate input with Zod
+  const validationResult = CreateOrderRequestSchema.safeParse(body);
+  if (!validationResult.success) {
+    return NextResponse.json(
+      { error: "Missing or invalid required fields" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const { userId, orderItems } = validationResult.data;
+    // Check if user exists
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Calculate total amount and validate products exist
@@ -117,7 +156,19 @@ export async function POST(req: NextRequest) {
     const serializedOrder = serializePrismaObject(order);
 
     return NextResponse.json(serializedOrder, { status: 201 });
-  } catch (_error) {
-    return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
+  } catch (error: any) {
+    if (error.code === "P2025") {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+    if (error.code === "P2002") {
+      return NextResponse.json({ error: "Unique constraint violation" }, { status: 409 });
+    }
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Validation failed", details: error.errors },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

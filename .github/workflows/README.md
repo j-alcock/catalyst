@@ -43,13 +43,20 @@ This repository uses GitHub Actions for continuous integration and deployment, w
 
 ### What Gets Tested
 
-1. **API Contract Compliance**
+1. **Dynamic Contract Testing**
+   - Automatically reads OpenAPI specification
+   - Loads Zod schemas for validation
+   - Generates test configurations dynamically
+   - Tests all endpoints with appropriate data
+   - Validates responses against expected schemas
+
+2. **API Contract Compliance**
    - All endpoints conform to OpenAPI specification
    - Response schemas match expected types
    - HTTP status codes are correct
    - Required fields are present
 
-2. **Contract Violation Detection**
+3. **Contract Violation Detection**
    - Missing required fields
    - Wrong data types
    - Extra fields (strict validation)
@@ -101,7 +108,13 @@ npm start
 
 ### Run Tests
 ```bash
-# Run contract tests
+# Run dynamic contract tests (recommended)
+npm run test:contract-dynamic
+
+# Run auto-generated contract tests
+npm run test:contract-auto
+
+# Run contract tests with HeyAPI client
 npm run test:contract
 
 # Run contract violation tests

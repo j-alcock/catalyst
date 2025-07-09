@@ -91,5 +91,11 @@
       "quoteStyle": "double",
       "attributePosition": "auto"
     }
+  },
+  "files": {
+    "ignore": [
+      ".next/",
+      "test-output/"
+    ]
   }
 }

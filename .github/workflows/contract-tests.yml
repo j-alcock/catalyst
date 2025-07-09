@@ -80,6 +80,22 @@ jobs:
           # Ensure tests can connect to the running API
           API_BASE_URL: http://localhost:3000
 
+      - name: Run auto-generated contract tests
+        run: npm run test:contract-auto
+        env:
+          API_BASE_URL: http://localhost:3000
+
+      - name: Run dynamic contract tests
+        run: npm run test:contract-dynamic
+        env:
+          API_BASE_URL: http://localhost:3000
+
+      - name: Run dynamic violation tests
+        run: npm run test:violations-dynamic
+        env:
+          API_BASE_URL: http://localhost:3000
+        continue-on-error: true # Violation tests are expected to fail
+
       - name: Run contract violation tests
         run: npm run test:violations
         env:

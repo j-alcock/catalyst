@@ -1,5 +1,7 @@
 import prisma from "@/lib/prisma/prisma";
+import { CreateUserRequestSchema } from "@/lib/schemas/zod-schemas";
 import { NextRequest, NextResponse } from "next/server";
+import { ZodError, z } from "zod";
 
 /**
  * @openapi
@@ -8,37 +10,50 @@ import { NextRequest, NextResponse } from "next/server";
  *     summary: Create a new user
  */
 export async function POST(req: NextRequest) {
+  // Parse JSON first
+  let body;
   try {
-    const body = await req.json();
-    const { name, email, password, picture } = body;
-    if (!name || !email) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    body = await req.json();
+  } catch (_jsonError) {
+    return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
+  }
+
+  // Validate input with Zod FIRST
+  let validationResult;
+  try {
+    validationResult = CreateUserRequestSchema.parse(body);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Missing or invalid required fields", details: error.errors },
+        { status: 400 }
+      );
     }
+    return NextResponse.json({ error: "Validation failed" }, { status: 400 });
+  }
 
+  // Only call Prisma if all validation passes
+  try {
+    const { name, email, password, picture } = validationResult;
     // Check if user with this email already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
         { error: "User with this email already exists" },
         { status: 409 }
       );
     }
-
+    // Create user
     const user = await prisma.user.create({
-      data: { name, email, password, picture },
+      data: {
+        name,
+        email,
+        password: password || "",
+        picture: picture || "",
+      },
     });
-    return NextResponse.json(user, { status: 201 });
-  } catch (error) {
-    // Check if it's a Prisma unique constraint error
-    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
-      return NextResponse.json(
-        { error: "User with this email already exists" },
-        { status: 409 }
-      );
-    }
+    return NextResponse.json(user);
+  } catch (_error: any) {
     return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
   }
 }

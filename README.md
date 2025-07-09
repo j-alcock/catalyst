@@ -69,46 +69,115 @@ This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-opti
 
 ## Contract Testing
 
-This project includes comprehensive contract testing using HeyAPI and Zod with both manual and algorithmic approaches:
+> **⚠️ Next.js Limitation:**
+> Due to a known limitation in the Next.js app router (see [issue #49209](https://github.com/vercel/next.js/issues/49209)), malformed JSON in API requests will always result in a 500 Internal Server Error, even if you try to catch and handle the error in your route handler. This is a framework-level issue and cannot be worked around in the app router. All other validation errors (invalid enums, missing fields, etc.) are properly handled and return 4xx errors as expected.
+
+This project includes a contract test suite that validates your API implementation against the OpenAPI specification using the HeyAPI-generated client and types.
 
 ### Running Contract Tests
 
+To run all contract tests:
+
 ```bash
-# Run comprehensive manual contract tests
 npm run test:contract
-
-# Run algorithmic contract tests (OpenAPI-driven)
-npm run test:contract:algorithmic
-
-# Run contract violation tests (should fail)
-npm run test:violations
 ```
 
-### Contract Testing Approaches
+This will execute all contract tests using the HeyAPI-generated TypeScript client and print a summary of results. The process will exit with a nonzero code if any contract is broken.
 
-#### 1. Manual Contract Tests (`test:contract`)
-- **Comprehensive field validation**: Tests every characteristic of all fields
-- **Type safety**: Uses TypeScript and Zod for runtime validation
-- **Error scenarios**: Tests 400, 404, 409, and 500 error responses
-- **Relationship integrity**: Validates foreign key relationships and nested objects
-- **Data consistency**: Ensures data matches between create and retrieve operations
-- **Business rules**: Validates business logic constraints
+You can also run the test runner directly with:
 
-#### 2. Algorithmic Contract Tests (`test:contract:algorithmic`)
-- **OpenAPI-driven**: Automatically generates tests from the OpenAPI specification
-- **Schema-based validation**: Uses Zod validators derived from the OpenAPI spec
-- **Automatic test generation**: No manual test maintenance required
-- **Complete coverage**: Tests all endpoints defined in the OpenAPI spec
-- **Edge case testing**: Automatically tests boundary conditions and edge cases
-- **Error response validation**: Validates error responses against OpenAPI error schemas
+```bash
+npx tsx src/lib/testing/run-heyapi-tests.ts
+```
 
-### Algorithmic Testing Benefits
+The contract tests cover all major endpoints (users, products, categories, orders) and both success and error scenarios.
 
-- **Single source of truth**: The OpenAPI spec is the contract
-- **Automatic updates**: Tests update automatically as the spec changes
-- **Complete coverage**: Ensures no endpoints are missed
-- **Consistent validation**: All responses validated against the same schemas
-- **Reduced maintenance**: No need to manually update tests when API changes
+### Dynamic Contract Tests
+
+To run dynamic contract tests that automatically read your OpenAPI specification and Zod schemas to generate tests:
+
+```bash
+npm run test:contract-dynamic
+```
+
+This system automatically:
+
+- **Reads OpenAPI Spec**: Parses your `api-spec.yaml` file to extract all endpoints
+- **Loads Zod Schemas**: Imports all your Zod validation schemas
+- **Generates Test Configs**: Creates test configurations for each endpoint
+- **Runs Validation**: Tests API responses against expected schemas
+- **Reports Results**: Provides detailed feedback on contract compliance
+
+#### Dynamic Test Features
+
+- **Automatic Discovery**: Finds all endpoints from OpenAPI spec automatically
+- **Schema Mapping**: Maps OpenAPI schema references to Zod schemas
+- **Test Data Generation**: Creates appropriate test data based on request schemas
+- **Response Validation**: Validates responses against expected Zod schemas
+- **Error Handling**: Tests error scenarios and validates error responses
+- **Performance Monitoring**: Measures response times for each endpoint
+
+#### How It Works
+
+1. **OpenAPI Parsing**: Reads your OpenAPI specification file
+2. **Endpoint Extraction**: Extracts all defined endpoints and their configurations
+3. **Schema Mapping**: Maps OpenAPI schema references to your Zod schemas
+4. **Test Generation**: Creates test configurations with appropriate test data
+5. **Execution**: Runs HTTP requests against your API
+6. **Validation**: Validates responses against expected schemas
+7. **Reporting**: Provides detailed results and statistics
+
+#### Usage Examples
+
+```bash
+# Run with default settings
+npm run test:contract-dynamic
+
+# Run against staging API
+API_BASE_URL=https://staging-api.example.com npm run test:contract-dynamic
+
+# Run with custom base URL
+npm run test:contract-dynamic --base-url http://localhost:3000
+```
+
+### Auto-Generated Contract Tests
+
+To run auto-generated contract tests that dynamically create tests from your OpenAPI spec and Zod schemas:
+
+```bash
+npm run test:contract-auto
+```
+
+This will automatically generate and run comprehensive tests for all API endpoints, including:
+
+- **Dynamic Test Generation**: Automatically creates tests for all API endpoints
+- **Schema-Driven Validation**: Uses generated Zod schemas for request/response validation
+- **Comprehensive Coverage**: Tests all CRUD operations, error scenarios, and performance
+- **Configurable Testing**: Supports different test types (validation, error, performance)
+
+#### Auto-Generated Test Features
+
+- **Endpoint Testing**: Tests all defined API endpoints with appropriate HTTP methods
+- **Schema Validation**: Validates responses against generated Zod schemas
+- **Error Handling**: Tests error scenarios and invalid requests
+- **Performance Monitoring**: Measures response times and performance metrics
+- **Flexible Configuration**: Configurable via environment variables or command-line arguments
+
+#### Usage Examples
+
+```bash
+# Run with default settings
+npm run test:contract-auto
+
+# Run against staging API
+API_BASE_URL=https://staging-api.example.com npm run test:contract-auto
+
+# Run only validation tests
+npm run test:contract-auto -- --no-error-tests --no-performance
+
+# Run with custom timeout
+npm run test:contract-auto -- --timeout 10000
+```
 
 ### HeyAPI Contract Tests
 
@@ -125,6 +194,54 @@ This test suite uses the HeyAPI client generated from your OpenAPI specification
 - Ensure type safety throughout the testing process
 
 The HeyAPI tests provide additional confidence that your API implementation matches the OpenAPI specification exactly.
+
+### Dynamic Contract Violation Tests
+
+To run dynamic contract violation tests that automatically generate violation scenarios from your OpenAPI specification and Zod schemas:
+
+```bash
+npm run test:violations-dynamic
+```
+
+This system automatically generates violation tests by:
+
+- **Reading OpenAPI Spec**: Parses your `api-spec.yaml` file to understand expected behavior
+- **Loading Zod Schemas**: Imports your Zod validation schemas to understand constraints
+- **Generating Violation Scenarios**: Creates tests for various violation types
+- **Testing Validation**: Ensures your API properly rejects invalid requests
+- **Reporting Results**: Provides detailed feedback on validation effectiveness
+
+#### Dynamic Violation Test Types
+
+- **Missing Required Fields**: Tests API rejection of requests missing required fields
+- **Wrong Data Types**: Tests API rejection of requests with incorrect data types
+- **Extra Fields**: Tests API rejection of requests with unexpected fields
+- **Invalid Enum Values**: Tests API rejection of invalid enum values
+- **Wrong HTTP Status Codes**: Tests API returns appropriate error status codes
+- **Invalid Response Structure**: Tests API maintains proper response structure
+
+#### How It Works
+
+1. **Endpoint Analysis**: Analyzes each endpoint from OpenAPI spec
+2. **Schema Mapping**: Maps request/response schemas to Zod validation rules
+3. **Violation Generation**: Creates test data that violates the schemas
+4. **Validation Testing**: Sends invalid requests and validates API responses
+5. **Result Analysis**: Determines if violations were properly detected
+
+#### Usage Examples
+
+```bash
+# Run with default settings
+npm run test:violations-dynamic
+
+# Run against staging API
+API_BASE_URL=https://staging-api.example.com npm run test:violations-dynamic
+
+# Run with custom base URL
+npm run test:violations-dynamic --base-url http://localhost:3000
+```
+
+**Note**: These tests are designed to detect violations, so they should pass when your API properly rejects invalid requests. A failed test may indicate that your API validation needs improvement.
 
 ### Contract Violation Tests
 

@@ -93,61 +93,139 @@ export const ErrorResponseSchema = z.object({
 });
 
 // Request schemas
-export const CreateProductRequestSchema = z.object({
-  name: z.string().min(1).max(255),
-  description: z.string().max(1000).optional(),
-  price: z.number().positive(),
-  stockQuantity: z.number().int().min(0),
-  categoryId: z.string().uuid(),
-});
+export const CreateProductRequestSchema = z
+  .object({
+    name: z.string().min(1).max(255),
+    description: z.string().max(1000).optional(),
+    price: z.number().positive(),
+    stockQuantity: z.number().int().min(0),
+    categoryId: z.string().uuid(),
+  })
+  .strict();
 
-export const UpdateProductRequestSchema = CreateProductRequestSchema.partial();
+// More strict update schema that validates each field individually
+export const UpdateProductRequestSchema = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    description: z.string().max(1000).optional(),
+    price: z.number().positive().optional(),
+    stockQuantity: z.number().int().min(0).optional(),
+    categoryId: z.string().uuid().optional(),
+  })
+  .strict()
+  .refine(
+    (data) => {
+      // Ensure at least one field is provided
+      return Object.keys(data).length > 0;
+    },
+    {
+      message: "At least one field must be provided for update",
+      path: ["update"],
+    }
+  );
 
-export const CreateCategoryRequestSchema = z.object({
-  name: z.string().min(1).max(255),
-  description: z.string().max(1000).optional(),
-});
+export const CreateCategoryRequestSchema = z
+  .object({
+    name: z.string().min(1).max(255),
+    description: z.string().max(1000).optional(),
+  })
+  .strict();
 
-export const CreateUserRequestSchema = z.object({
-  name: z.string().min(1).max(255),
-  email: z.string().email(),
-  password: z.string().min(6).optional(),
-  picture: z.string().optional(),
-});
+export const CreateUserRequestSchema = z
+  .object({
+    name: z.string().min(1).max(255),
+    email: z.string().email(),
+    password: z.string().min(6).optional(),
+    picture: z.string().optional(),
+  })
+  .strict();
 
-export const CreateOrderRequestSchema = z.object({
-  userId: z.string().uuid(),
-  orderItems: z
-    .array(
-      z.object({
-        productId: z.string().uuid(),
-        quantity: z.number().int().positive(),
-      })
-    )
-    .min(1),
-});
+export const CreateOrderRequestSchema = z
+  .object({
+    userId: z.string().uuid(),
+    orderItems: z
+      .array(
+        z
+          .object({
+            productId: z.string().uuid(),
+            quantity: z.number().int().positive(),
+          })
+          .strict()
+      )
+      .min(1),
+  })
+  .strict();
 
-export const UpdateOrderStatusRequestSchema = z.object({
-  status: OrderStatusSchema,
-});
+export const UpdateOrderStatusRequestSchema = z
+  .object({
+    status: OrderStatusSchema,
+  })
+  .strict();
 
 // Query parameter schemas
-export const PaginationQuerySchema = z.object({
-  page: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().int().positive())
-    .default("1"),
-  pageSize: z
-    .string()
-    .transform((val) => parseInt(val, 10))
-    .pipe(z.number().int().positive().max(100))
-    .default("10"),
-});
+export const PaginationQuerySchema = z
+  .object({
+    page: z
+      .string()
+      .transform((val) => parseInt(val, 10))
+      .pipe(z.number().int().positive())
+      .default("1"),
+    pageSize: z
+      .string()
+      .transform((val) => parseInt(val, 10))
+      .pipe(z.number().int().positive().max(100))
+      .default("10"),
+  })
+  .strict();
 
-export const OrdersQuerySchema = z.object({
-  userId: z.string().uuid().optional(),
-});
+export const OrdersQuerySchema = z
+  .object({
+    userId: z.string().uuid().optional(),
+    status: z
+      .string()
+      .refine(
+        (val) => {
+          if (!val) return true; // Allow empty/undefined
+          return ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"].includes(
+            val
+          );
+        },
+        {
+          message:
+            "Status must be one of: PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED",
+        }
+      )
+      .optional(),
+  })
+  .strict();
+
+export const ProductsQuerySchema = z
+  .object({
+    categoryId: z.string().uuid().optional(),
+    search: z.string().optional(),
+    minPrice: z
+      .string()
+      .transform((val) => parseFloat(val))
+      .pipe(z.number().positive())
+      .optional(),
+    maxPrice: z
+      .string()
+      .transform((val) => parseFloat(val))
+      .pipe(z.number().positive())
+      .optional(),
+    inStock: z
+      .string()
+      .transform((val) => val === "true")
+      .pipe(z.boolean())
+      .optional(),
+  })
+  .strict();
+
+export const CategoriesQuerySchema = z
+  .object({
+    search: z.string().optional(),
+  })
+  .strict();
 
 // Type exports
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;

@@ -18,9 +18,13 @@
     "seed": "tsx prisma/seed.ts",
     "generate:openapi": "prisma generate",
     "test:contract": "tsx src/lib/testing/run-heyapi-tests.ts",
-    "test:contract:algorithmic": "tsx src/lib/testing/run-algorithmic-tests.ts",
+    "test:contract-algorithmic": "tsx src/lib/testing/run-algorithmic-tests.ts",
     "test:violations": "tsx src/lib/testing/run-violation-tests.ts",
-    "test:heyapi": "tsx src/lib/testing/run-heyapi-tests.ts"
+    "test:heyapi": "tsx src/lib/testing/run-heyapi-tests.ts",
+    "test:contract-auto": "tsx src/lib/testing/run-auto-contract-tests.ts",
+    "test:contract-dynamic": "tsx src/lib/testing/run-dynamic-contract-tests.ts",
+    "test:contract-demo": "tsx src/lib/testing/dynamic-demo.ts",
+    "test:violations-dynamic": "tsx src/lib/testing/run-dynamic-violation-tests.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": ["biome check --write --no-errors-on-unmatched ./src"]
@@ -47,6 +51,7 @@
     "clsx": "2.1.1",
     "dotenv": "^17.1.0",
     "javascript-time-ago": "2.5.11",
+    "js-yaml": "^4.1.0",
     "lucide-react": "0.460.0",
     "motion": "12.6.3",
     "next": "15.2.3",
@@ -68,6 +73,7 @@
     "@biomejs/biome": "1.8.3",
     "@hey-api/openapi-ts": "^0.78.2",
     "@next/bundle-analyzer": "15.2.3",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "20",
     "@types/react": "19.0.12",
     "@types/react-dom": "19.0.0",
