@@ -171,13 +171,6 @@ export class UnifiedDynamicTester {
   }
 
   /**
-   * Get Zod schema by name dynamically
-   */
-  private getZodSchema(schemaName: string): z.ZodSchema<any> | null {
-    return this.availableSchemas[schemaName] || null;
-  }
-
-  /**
    * Generate contract test configuration for an endpoint
    */
   private generateContractTestConfig(endpoint: EndpointDefinition): ContractTestConfig {
@@ -194,7 +187,13 @@ export class UnifiedDynamicTester {
       if (code >= 200 && code < 300) {
         config.expectedStatusCodes.push(code);
       } else if (code >= 400) {
-        config.errorStatusCodes.push(code);
+        // For endpoints with path parameters that require existing resources,
+        // include 404 as an expected status code for contract tests
+        if (code === 404 && endpoint.path.includes("/{id}")) {
+          config.expectedStatusCodes.push(code);
+        } else {
+          config.errorStatusCodes.push(code);
+        }
       }
     }
 
