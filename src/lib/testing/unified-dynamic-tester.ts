@@ -46,6 +46,13 @@ export interface ContractTestConfig {
   errorStatusCodes: number[];
 }
 
+export interface ValidationStep {
+  name: string;
+  passed: boolean;
+  details?: string;
+  error?: string;
+}
+
 export interface ContractTestResult {
   success: boolean;
   endpoint: string;
@@ -54,6 +61,7 @@ export interface ContractTestResult {
   errors: string[];
   responseTime?: number;
   testType: "contract";
+  validationSteps: ValidationStep[];
 }
 
 // Violation Test Interfaces
@@ -750,6 +758,7 @@ export class UnifiedDynamicTester {
   async runContractTest(config: ContractTestConfig): Promise<ContractTestResult> {
     const startTime = Date.now();
     const errors: string[] = [];
+    const validationSteps: ValidationStep[] = [];
 
     try {
       let url = `${this.baseUrl}${config.endpoint}`;
@@ -775,12 +784,34 @@ export class UnifiedDynamicTester {
       let parsedData: any;
       try {
         parsedData = JSON.parse(responseData);
+        validationSteps.push({
+          name: "JSON Response Parsing",
+          passed: true,
+          details: "Response data successfully parsed as JSON",
+        });
       } catch {
         parsedData = responseData;
+        validationSteps.push({
+          name: "JSON Response Parsing",
+          passed: false,
+          error: "Response data is not valid JSON",
+        });
       }
 
       // Validate status code
-      if (!config.expectedStatusCodes.includes(response.status)) {
+      const statusCodeValid = config.expectedStatusCodes.includes(response.status);
+      validationSteps.push({
+        name: "HTTP Status Code Validation",
+        passed: statusCodeValid,
+        details: statusCodeValid
+          ? `Status code ${response.status} is in expected range [${config.expectedStatusCodes.join(", ")}]`
+          : `Status code ${response.status} is not in expected range [${config.expectedStatusCodes.join(", ")}]`,
+        error: statusCodeValid
+          ? undefined
+          : `Unexpected status code: ${response.status}. Expected one of: ${config.expectedStatusCodes.join(", ")}`,
+      });
+
+      if (!statusCodeValid) {
         errors.push(
           `Unexpected status code: ${response.status}. Expected one of: ${config.expectedStatusCodes.join(", ")}`
         );
@@ -790,27 +821,67 @@ export class UnifiedDynamicTester {
       if (config.responseSchema && response.status >= 200 && response.status < 300) {
         try {
           config.responseSchema.parse(parsedData);
+          validationSteps.push({
+            name: "Response Schema Validation",
+            passed: true,
+            details: "Response data conforms to expected schema",
+          });
         } catch (error) {
           if (error instanceof z.ZodError) {
+            const validationErrors = error.errors
+              .map((err) => `${err.path.join(".")}: ${err.message}`)
+              .join(", ");
+            validationSteps.push({
+              name: "Response Schema Validation",
+              passed: false,
+              error: `Schema validation failed: ${validationErrors}`,
+            });
             errors.push(`Response schema validation failed: ${error.message}`);
             error.errors.forEach((err) => {
               errors.push(`  - ${err.path.join(".")}: ${err.message}`);
             });
           } else {
+            validationSteps.push({
+              name: "Response Schema Validation",
+              passed: false,
+              error: `Unexpected error: ${error}`,
+            });
             errors.push(`Unexpected error: ${error}`);
           }
         }
+      } else if (config.responseSchema) {
+        validationSteps.push({
+          name: "Response Schema Validation",
+          passed: true,
+          details: "Skipped - response status is not in 2xx range",
+        });
       }
 
       // Validate error response schema if available
       if (config.errorSchema && response.status >= 400) {
         try {
           config.errorSchema.parse(parsedData);
+          validationSteps.push({
+            name: "Error Response Schema Validation",
+            passed: true,
+            details: "Error response data conforms to expected error schema",
+          });
         } catch (error) {
           if (error instanceof z.ZodError) {
+            validationSteps.push({
+              name: "Error Response Schema Validation",
+              passed: false,
+              error: `Error schema validation failed: ${error.message}`,
+            });
             errors.push(`Error response schema validation failed: ${error.message}`);
           }
         }
+      } else if (config.errorSchema) {
+        validationSteps.push({
+          name: "Error Response Schema Validation",
+          passed: true,
+          details: "Skipped - response status is not in 4xx/5xx range",
+        });
       }
 
       return {
@@ -821,10 +892,17 @@ export class UnifiedDynamicTester {
         errors,
         responseTime,
         testType: "contract",
+        validationSteps,
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;
       errors.push(`Request failed: ${error}`);
+
+      validationSteps.push({
+        name: "HTTP Request",
+        passed: false,
+        error: `Request failed: ${error}`,
+      });
 
       return {
         success: false,
@@ -834,6 +912,7 @@ export class UnifiedDynamicTester {
         errors,
         responseTime,
         testType: "contract",
+        validationSteps,
       };
     }
   }
@@ -1151,6 +1230,21 @@ export class UnifiedDynamicTester {
 
       if (result.responseTime) {
         console.log(`   ⏱️  Response time: ${result.responseTime}ms`);
+      }
+
+      // Display granular validation steps
+      if (result.validationSteps && result.validationSteps.length > 0) {
+        console.log("   🔍 Validation Steps:");
+        result.validationSteps.forEach((step) => {
+          const stepStatus = step.passed ? "✅" : "❌";
+          console.log(`      ${stepStatus} ${step.name}`);
+          if (step.details) {
+            console.log(`         📝 ${step.details}`);
+          }
+          if (step.error) {
+            console.log(`         ❌ ${step.error}`);
+          }
+        });
       }
 
       if (!result.success && result.errors.length > 0) {
