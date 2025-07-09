@@ -232,7 +232,7 @@ export class ContractViolationTestSuite {
     for (const endpoint of nonExistentEndpoints) {
       try {
         const response = await fetch(`${this.baseUrl}${endpoint}`);
-
+        const responseBody = await response.text();
         // Accept both 404 and 400 as valid "not found" responses
         if (response.status === 404 || response.status === 400) {
           contractTester.validateResponse(
@@ -248,6 +248,9 @@ export class ContractViolationTestSuite {
           );
         } else {
           console.log(`⚠️  Test 4: Endpoint exists (${endpoint})`);
+          console.log(`    ↳ Actual status: ${response.status}`);
+          console.log(`    ↳ Response body: ${responseBody}`);
+          console.log(`    ↳ Expected status: 404 or 400`);
         }
       } catch (_error) {
         console.log(
@@ -276,13 +279,14 @@ export class ContractViolationTestSuite {
           categoryId: "invalid-category-id",
         }),
       });
+      const responseBody = await response.text();
 
       if (response.status === 400) {
         contractTester.validateResponse(
           "/api/products",
           "POST",
           400,
-          await response.json(),
+          JSON.parse(responseBody),
           z.object({ error: z.string() }),
           0
         );
@@ -291,6 +295,9 @@ export class ContractViolationTestSuite {
         );
       } else {
         console.log("⚠️  Test 5: No contract violation detected for status codes");
+        console.log(`    ↳ Actual status: ${response.status}`);
+        console.log(`    ↳ Response body: ${responseBody}`);
+        console.log(`    ↳ Expected status: 400`);
       }
     } catch (_error) {
       console.log("✅ Test 5 PASSED: Contract violation detected (API error)");

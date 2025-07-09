@@ -62,13 +62,44 @@ jobs:
           echo "Waiting for server to start..."
           sleep 15
           echo "Server should be running on http://localhost:3000"
+          
+          # Verify server is actually running
+          for i in {1..10}; do
+            if curl -f http://localhost:3000/api/test > /dev/null 2>&1; then
+              echo "✅ Server is running and responding"
+              break
+            else
+              echo "⏳ Waiting for server to be ready... (attempt $i/10)"
+              sleep 3
+            fi
+          done
+          
+          # Final check - if server is not responding, fail the job
+          if ! curl -f http://localhost:3000/api/test > /dev/null 2>&1; then
+            echo "❌ Server failed to start properly"
+            exit 1
+          fi
         
       - name: Run Contract Tester
-        run: npx tsx src/lib/testing/run-contract-tester.ts
+        run: |
+          echo "🔍 Running Contract Tests..."
+          npx tsx src/lib/testing/run-contract-tester.ts
+          if [ $? -ne 0 ]; then
+            echo "❌ Contract tests failed"
+            exit 1
+          fi
+          echo "✅ Contract tests passed"
         env:
           API_BASE_URL: http://localhost:3000
         
       - name: Run Contract Violation Tests
-        run: npx tsx src/lib/testing/run-violation-tests.ts
+        run: |
+          echo "🔍 Running Contract Violation Tests..."
+          npx tsx src/lib/testing/run-violation-tests.ts
+          if [ $? -ne 0 ]; then
+            echo "❌ Contract violation tests failed"
+            exit 1
+          fi
+          echo "✅ Contract violation tests passed"
         env:
           API_BASE_URL: http://localhost:3000 
