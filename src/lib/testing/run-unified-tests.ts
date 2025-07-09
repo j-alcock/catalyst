@@ -3,8 +3,18 @@
 import { unifiedTester } from "./unified-dynamic-tester";
 
 async function main() {
+  // Check if port is specified via command line argument
+  const portArg = process.argv.find((arg) => arg.startsWith("--port="));
+  if (portArg) {
+    const port = portArg.split("=")[1];
+    process.env.TEST_PORT = port;
+  }
+
   console.log("🚀 Unified Dynamic API Testing System");
   console.log("=".repeat(50));
+  console.log(
+    `🌐 Testing against: ${process.env.TEST_PORT ? `http://localhost:${process.env.TEST_PORT}` : "http://localhost:3001"}`
+  );
 
   try {
     // Run all tests (both contract and violation)
@@ -12,6 +22,9 @@ async function main() {
 
     // Print results
     unifiedTester.printResults();
+
+    // Cleanup resources
+    await unifiedTester.cleanup();
 
     // Exit with appropriate code
     const summary = unifiedTester.getSummary();

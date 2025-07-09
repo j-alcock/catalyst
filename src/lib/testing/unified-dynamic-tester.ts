@@ -413,6 +413,19 @@ export class UnifiedDynamicTester {
     // Track endpoint coverage
     this.trackEndpointCoverage(endpoint.path, endpoint.method);
 
+    // Track error response schemas for violation tests
+    if (endpoint.responses) {
+      // Track Error schema for 4xx responses
+      for (const [statusCode, response] of Object.entries(endpoint.responses)) {
+        if (statusCode.startsWith("4") || statusCode.startsWith("5")) {
+          // Check if response uses Error schema
+          if (response.content?.["application/json"]?.schema?.$ref?.includes("Error")) {
+            this.trackSchemaCoverage("Error");
+          }
+        }
+      }
+    }
+
     // Dynamically analyze the endpoint definition to determine what tests to generate
     const hasRequestBody = endpoint.requestBody?.content?.["application/json"]?.schema;
     const hasPathParameters = endpoint.parameters?.some((p: any) => p.in === "path");
@@ -495,16 +508,44 @@ export class UnifiedDynamicTester {
 
     // Test 6: Invalid path parameters (for endpoints with path parameters)
     if (hasPathParameters) {
+      // Dynamically generate invalid path parameter value based on OpenAPI spec
+      const invalidPath = this.generateInvalidPathParameter(endpoint.path, endpoint);
       tests.push({
-        endpoint: endpoint.path.replace("/{id}", "/invalid-uuid"),
+        endpoint: invalidPath,
         method: endpoint.method,
-        description: `Invalid UUID in path parameter for ${endpoint.method} ${endpoint.path}`,
-        expectedViolation: "Invalid UUID should return 400 or 404",
+        description: `Invalid path parameter for ${endpoint.method} ${endpoint.path}`,
+        expectedViolation: "Invalid path parameter should return 400 or 404",
         testType: "wrong_status",
       });
     }
 
     return tests;
+  }
+
+  /**
+   * Dynamically generate an invalid path parameter for a given endpoint
+   */
+  private generateInvalidPathParameter(
+    path: string,
+    endpoint: EndpointDefinition
+  ): string {
+    // Find path parameters in the OpenAPI spec for this endpoint
+    const paramDefs = (endpoint.parameters || []).filter((p: any) => p.in === "path");
+    let invalidPath = path;
+    for (const param of paramDefs) {
+      // Determine the type of the parameter
+      let invalidValue = "invalid";
+      if (param.schema?.format === "uuid") {
+        invalidValue = "not-a-uuid";
+      } else if (param.schema?.type === "number" || param.schema?.type === "integer") {
+        invalidValue = "not-a-number";
+      } else if (param.schema?.type === "string") {
+        invalidValue = "!!!";
+      }
+      // Replace the parameter placeholder with the invalid value
+      invalidPath = invalidPath.replace(`/{${param.name}}`, `/${invalidValue}`);
+    }
+    return invalidPath;
   }
 
   /**
@@ -611,7 +652,7 @@ export class UnifiedDynamicTester {
     openAPISchema: any,
     resource: string,
     method: string,
-    debugLabel?: string
+    _debugLabel?: string
   ): z.ZodSchema<any> | null {
     if (!openAPISchema || typeof openAPISchema !== "object" || !openAPISchema.properties)
       return null;
@@ -621,8 +662,8 @@ export class UnifiedDynamicTester {
     let bestMatch: { schema: z.ZodSchema<any>; name: string; score: number } | null =
       null;
 
-    // Handle both singular and plural resource names
-    const resourceSingular = resource.endsWith("s") ? resource.slice(0, -1) : resource;
+    // Handle both singular and plural resource names (improved)
+    const resourceSingular = toSingular(resource);
     const resourcePlural = resource.endsWith("s") ? resource : `${resource}s`;
 
     for (const [schemaName, zodSchema] of Object.entries(this.availableSchemas)) {
@@ -632,13 +673,27 @@ export class UnifiedDynamicTester {
         nameLower.includes(resource) ||
         nameLower.includes(resourceSingular) ||
         nameLower.includes(resourcePlural);
-      if (!hasResourceMatch) continue;
+      if (!hasResourceMatch) {
+        continue;
+      }
 
-      // Only consider create for POST, update for PUT
-      if (method === "POST" && !nameLower.includes("create")) continue;
-      if (method === "PUT" && !nameLower.includes("update")) continue;
-      if (!(zodSchema instanceof z.ZodObject)) continue;
-      const zodShape = zodSchema.shape;
+      // More precise method matching with fallbacks
+      const isCreateRequest = method === "POST" && nameLower.includes("create");
+      const isUpdateRequest = method === "PUT" && nameLower.includes("update");
+      const _isGetRequest = method === "GET";
+      // For POST/PUT, require method-specific schemas; for GET, be more flexible
+      if (method === "POST" && !isCreateRequest) {
+        continue;
+      }
+      if (method === "PUT" && !isUpdateRequest) {
+        continue;
+      }
+      // Unwrap ZodEffects and similar wrappers
+      const baseSchema = unwrapZodSchema(zodSchema);
+      if (!(baseSchema instanceof z.ZodObject)) {
+        continue;
+      }
+      const zodShape = baseSchema.shape;
       const zodKeys = Object.keys(zodShape);
       // Field overlap
       const matchingKeys: string[] = openAPIKeys.filter((key) => zodKeys.includes(key));
@@ -663,75 +718,45 @@ export class UnifiedDynamicTester {
           }
         }
       }
-      // Score: weighted sum
-      const score =
-        0.5 * (matchingKeys.length / openAPIKeys.length) +
+      // Enhanced scoring with method-specific bonuses
+      let score =
+        0.4 * (matchingKeys.length / openAPIKeys.length) +
         0.3 * (requiredOverlap.length / (requiredFields.length || 1)) +
         0.2 * (typeMatches / (openAPIKeys.length || 1));
+      // Bonus for exact method matches
+      if (isCreateRequest || isUpdateRequest) {
+        score += 0.3;
+      }
+      // Bonus for exact resource matches
+      if (nameLower.includes(resource) || nameLower.includes(resourceSingular)) {
+        score += 0.1;
+      }
       if (!bestMatch || score > bestMatch.score) {
         bestMatch = { schema: zodSchema, name: schemaName, score };
       }
-      // Print debug info for each candidate
-      if (debugLabel) {
-        console.log(`      Candidate Zod: ${schemaName}`);
-        console.log(`         Zod fields: ${zodKeys.join(", ")}`);
-        if (zodSchema instanceof z.ZodObject) {
-          const zodRequired = Object.entries(zodShape)
-            .filter(
-              ([_, v]) =>
-                !(typeof (v as any).isOptional === "function" && (v as any).isOptional())
-            )
-            .map(([k]) => k);
-          console.log(`         Zod required: ${zodRequired.join(", ")}`);
-        }
-      }
     }
-
-    // Relaxed acceptance criteria
+    // Enhanced acceptance criteria
     if (bestMatch) {
-      // Primary: Accept if score > 0.3 (lowered from 0.4)
-      if (bestMatch.score > 0.3) {
-        if (debugLabel) {
-          console.log(
-            `      ✅ Accepted by score: ${bestMatch.name} (score: ${bestMatch.score.toFixed(2)})`
-          );
-        }
+      // Primary: Accept if score > 0.5 (increased threshold for better precision)
+      if (bestMatch.score > 0.5) {
         return bestMatch.schema;
       }
-
-      // Fallback 1: If resource/method match and at least 1 overlapping field, accept
+      // Fallback 1: If it's a perfect method match (create/update) and has any overlap
+      const isPerfectMethodMatch =
+        (method === "POST" && bestMatch.name.toLowerCase().includes("create")) ||
+        (method === "PUT" && bestMatch.name.toLowerCase().includes("update"));
       const fallbackMatchingKeys: string[] = openAPIKeys.filter(
         (key: string) =>
           (bestMatch!.schema as z.ZodObject<any>).shape &&
           Object.keys((bestMatch!.schema as z.ZodObject<any>).shape).includes(key)
       );
-      if (fallbackMatchingKeys.length >= 1) {
-        if (debugLabel) {
-          console.log(
-            `      ✅ Accepted by fallback 1: ${bestMatch.name} (${fallbackMatchingKeys.length} matching fields)`
-          );
-        }
+      if (isPerfectMethodMatch && fallbackMatchingKeys.length >= 1) {
         return bestMatch.schema;
       }
-
-      // Fallback 2: If resource matches and schema name contains resource, accept
-      const bestMatchNameLower = bestMatch.name.toLowerCase();
-      const hasResourceMatch =
-        bestMatchNameLower.includes(resource) ||
-        bestMatchNameLower.includes(resourceSingular) ||
-        bestMatchNameLower.includes(resourcePlural);
-      if (hasResourceMatch) {
-        if (debugLabel) {
-          console.log(
-            `      ✅ Accepted by fallback 2: ${bestMatch.name} (resource match)`
-          );
-        }
+      // Fallback 2: If resource/method match and at least 2 overlapping fields, accept
+      if (fallbackMatchingKeys.length >= 2) {
         return bestMatch.schema;
       }
-    }
-
-    if (debugLabel) {
-      console.log(`      ❌ No match found for ${debugLabel}`);
     }
     return null;
   }
@@ -811,73 +836,387 @@ export class UnifiedDynamicTester {
     // Analyze the endpoint to determine what fixes are needed
     const endpointAnalysis = this.analyzeEndpoint(path, method);
 
-    // --- NEW: Always fix all reference fields to use real IDs from seed data ---
+    // --- STEP 1: Fix all reference fields to use real IDs from seed data ---
     testData = await this.fixAllReferenceFieldsWithRealIds(testData, seedData);
 
-    // --- NEW: Always generate a unique email for user creation ---
-    if (path.includes("/users") && method === "POST" && testData.email !== undefined) {
-      testData.email = generateUniqueEmail();
+    // --- STEP 2: Fix unique fields (like emails) dynamically ---
+    testData = await this.fixUniqueFieldsDynamically(testData, path, method, seedData);
+
+    // --- STEP 3: Fix enum fields dynamically ---
+    testData = await this.fixEnumFieldsDynamically(testData, path, method);
+
+    // --- STEP 4: Remove auto-generated fields that should be set by the API ---
+    testData = this.removeAutoGeneratedFields(testData, path, method);
+
+    // Apply dynamic fixes based on endpoint analysis (still needed for unique fields, etc.)
+    return this.applyDynamicFixes(testData, endpointAnalysis, seedData);
+  }
+
+  /**
+   * Fix unique fields (like emails) dynamically by analyzing the schema
+   */
+  private async fixUniqueFieldsDynamically(
+    testData: any,
+    path: string,
+    method: string,
+    seedData: any
+  ): Promise<any> {
+    if (!testData || typeof testData !== "object") return testData;
+
+    // Get the request schema to analyze field types
+    const requestSchema = this.getRequestSchema(path, method);
+    if (!requestSchema) return testData;
+
+    const fixedData = { ...testData };
+
+    // Analyze each field in the test data
+    for (const [fieldName, fieldValue] of Object.entries(fixedData)) {
+      // Check if this field should be unique based on schema analysis
+      if (await this.isUniqueField(fieldName, requestSchema, path, method)) {
+        fixedData[fieldName] = await this.generateUniqueValue(
+          fieldName,
+          fieldValue,
+          seedData
+        );
+      }
     }
 
-    // --- NEW: Special handling for orders endpoints ---
-    if (path.includes("/orders")) {
-      if (method === "POST") {
-        // Ensure we have valid user and product references for order creation
-        if (testData.userId && seedData.users.length > 0) {
-          testData.userId = seedData.users[0].id;
+    return fixedData;
+  }
+
+  /**
+   * Check if a field should be unique based on database schema analysis
+   */
+  private async isUniqueField(
+    fieldName: string,
+    schema: z.ZodSchema<any>,
+    path: string,
+    method: string
+  ): Promise<boolean> {
+    if (!schema || !(schema instanceof z.ZodObject)) return false;
+
+    const shape = schema.shape;
+    const fieldSchema = shape[fieldName];
+
+    if (!fieldSchema) return false;
+
+    // STEP 1: Check database schema for unique constraints
+    const dbUniqueFields = await this.getDatabaseUniqueFields(path, method);
+    if (dbUniqueFields.includes(fieldName)) {
+      return true;
+    }
+
+    // STEP 2: Check for common unique field patterns (fallback)
+    const uniquePatterns = [
+      /email/i,
+      /username/i,
+      /name/i,
+      /title/i,
+      /slug/i,
+      /code/i,
+      /identifier/i,
+    ];
+
+    if (uniquePatterns.some((pattern) => pattern.test(fieldName))) {
+      return true;
+    }
+
+    // STEP 3: Check if field has unique constraints in Zod schema
+    if (fieldSchema._def?.typeName === "ZodString") {
+      // Email format is typically unique
+      if (
+        fieldSchema._def?.checks?.some(
+          (check: any) => check.kind === "email" || check.kind === "regex"
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Get unique fields for a resource by analyzing the Prisma schema dynamically
+   */
+  private async getDatabaseUniqueFields(
+    path: string,
+    _method: string
+  ): Promise<string[]> {
+    // Extract resource type from path
+    const resourceMatch = path.match(/\/api\/([^\/]+)/);
+    if (!resourceMatch) return [];
+
+    const resourceType = resourceMatch[1].toLowerCase();
+    const uniqueFields: string[] = [];
+
+    try {
+      // Read the Prisma schema file
+      const fs = require("fs");
+      const pathModule = require("path");
+      const schemaPath = pathModule.join(process.cwd(), "prisma", "schema.prisma");
+
+      if (!fs.existsSync(schemaPath)) {
+        // Fallback: assume id is unique for all resources
+        uniqueFields.push("id");
+        return uniqueFields;
+      }
+
+      const schemaContent = fs.readFileSync(schemaPath, "utf8");
+
+      // Find the model for this resource type
+      const modelName = this.getModelNameFromResource(resourceType);
+      const modelRegex = new RegExp(`model\\s+${modelName}\\s*\\{[^}]*\\}`, "gs");
+      const modelMatch = schemaContent.match(modelRegex);
+
+      if (!modelMatch) {
+        // Model not found, assume id is unique
+        uniqueFields.push("id");
+        return uniqueFields;
+      }
+
+      const modelDefinition = modelMatch[0];
+
+      // Extract field definitions
+      const fieldRegex = /(\w+)\s+(\w+)(\s*\[.*?\])?/g;
+      let fieldMatch = fieldRegex.exec(modelDefinition);
+
+      while (fieldMatch !== null) {
+        const fieldName = fieldMatch[1];
+        const _fieldType = fieldMatch[2];
+        const attributes = fieldMatch[3] || "";
+
+        // Check for @id attribute
+        if (attributes.includes("@id")) {
+          uniqueFields.push(fieldName);
         }
-        if (testData.orderItems && Array.isArray(testData.orderItems)) {
-          // Ensure each order item has valid product references
-          testData.orderItems = testData.orderItems.map((item: any) => ({
-            ...item,
-            productId:
-              seedData.products.length > 0 ? seedData.products[0].id : item.productId,
-            quantity: item.quantity || 1,
-          }));
+        // Check for @unique attribute
+        else if (attributes.includes("@unique")) {
+          uniqueFields.push(fieldName);
         }
-        // Remove status field if present (should be set by API)
-        delete testData.status;
-      } else if (method === "PUT" && path.includes("/status")) {
-        // Dynamically set a valid status value from Zod schema or OpenAPI
-        let validStatuses: string[] | undefined;
-        // Try Zod schema first
-        const zodSchema = this.getRequestSchema(path, method);
-        if (zodSchema && zodSchema instanceof z.ZodObject) {
-          const shape = zodSchema.shape;
-          if (
-            shape.status &&
-            shape.status._def &&
-            shape.status._def.typeName === "ZodEnum"
-          ) {
-            validStatuses = shape.status._def.values;
+        // Check for @@unique constraint on multiple fields
+        else if (attributes.includes("@@unique")) {
+          // Extract field names from @@unique constraint
+          const uniqueConstraintMatch = attributes.match(/@@unique\(\[([^\]]+)\]\)/);
+          if (uniqueConstraintMatch) {
+            const constraintFields = uniqueConstraintMatch[1]
+              .split(",")
+              .map((f) => f.trim());
+            uniqueFields.push(...constraintFields);
           }
         }
-        // Fallback to OpenAPI enum extraction
-        if (!validStatuses) {
-          const endpointDef = this.findEndpointDefinition(path, method);
-          const openAPISchema =
-            endpointDef?.requestBody?.content?.["application/json"]?.schema;
-          if (
-            openAPISchema &&
-            openAPISchema.properties &&
-            openAPISchema.properties.status &&
-            Array.isArray(openAPISchema.properties.status.enum)
-          ) {
-            validStatuses = openAPISchema.properties.status.enum;
-          }
-        }
-        // Set status if we found valid values
-        if (validStatuses && validStatuses.length > 0) {
-          testData.status = validStatuses[0];
-        } else {
-          // If no enum found, fallback to a string
-          testData.status = "PENDING";
+
+        fieldMatch = fieldRegex.exec(modelDefinition);
+      }
+
+      // If no unique fields found, assume id is unique
+      if (uniqueFields.length === 0) {
+        uniqueFields.push("id");
+      }
+    } catch (error) {
+      console.warn(`Failed to read Prisma schema for unique fields: ${error}`);
+      // Fallback: assume id is unique
+      uniqueFields.push("id");
+    }
+
+    return uniqueFields;
+  }
+
+  /**
+   * Map resource type to Prisma model name
+   */
+  private getModelNameFromResource(resourceType: string): string {
+    // Handle common plural to singular mappings
+    const singular = toSingular(resourceType);
+
+    // Capitalize first letter for model name
+    return singular.charAt(0).toUpperCase() + singular.slice(1);
+  }
+
+  /**
+   * Check if a field should be unique based on pattern analysis (synchronous version for analysis)
+   */
+  private isUniqueFieldByPattern(fieldName: string, fieldSchema: any): boolean {
+    // Check for common unique field patterns
+    const uniquePatterns = [
+      /email/i,
+      /username/i,
+      /name/i,
+      /title/i,
+      /slug/i,
+      /code/i,
+      /identifier/i,
+    ];
+
+    // Check if field name matches unique patterns
+    if (uniquePatterns.some((pattern) => pattern.test(fieldName))) {
+      return true;
+    }
+
+    // Check if field has unique constraints in schema
+    if (fieldSchema?.type === "string") {
+      // Email format is typically unique
+      if (fieldSchema?.format === "email" || fieldSchema?.pattern) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Generate a unique value for a field
+   */
+  private async generateUniqueValue(
+    fieldName: string,
+    currentValue: any,
+    _seedData: any
+  ): Promise<any> {
+    const fieldLower = fieldName.toLowerCase();
+
+    // Email fields
+    if (fieldLower.includes("email")) {
+      return generateUniqueEmail();
+    }
+
+    // Name fields
+    if (fieldLower.includes("name")) {
+      return `Test ${fieldName} ${Date.now()}`;
+    }
+
+    // Title fields
+    if (fieldLower.includes("title")) {
+      return `Test ${fieldName} ${Date.now()}`;
+    }
+
+    // Username fields
+    if (fieldLower.includes("username")) {
+      return `testuser_${Date.now()}`;
+    }
+
+    // Slug fields
+    if (fieldLower.includes("slug")) {
+      return `test-${fieldName}-${Date.now()}`;
+    }
+
+    // Default: return current value if it's already unique-looking
+    if (typeof currentValue === "string" && currentValue.includes("test")) {
+      return currentValue;
+    }
+
+    // Fallback: make it unique
+    return `${currentValue || fieldName}_${Date.now()}`;
+  }
+
+  /**
+   * Fix enum fields dynamically by extracting valid values from schema
+   */
+  private async fixEnumFieldsDynamically(
+    testData: any,
+    path: string,
+    method: string
+  ): Promise<any> {
+    if (!testData || typeof testData !== "object") return testData;
+
+    // Get the request schema to analyze enum fields
+    const requestSchema = this.getRequestSchema(path, method);
+    if (!requestSchema) return testData;
+
+    const fixedData = { ...testData };
+
+    // Analyze each field in the test data
+    for (const [fieldName, fieldValue] of Object.entries(fixedData)) {
+      const validEnumValues = this.getEnumValuesForField(
+        fieldName,
+        requestSchema,
+        path,
+        method
+      );
+
+      if (validEnumValues && validEnumValues.length > 0) {
+        // Set to first valid enum value if current value is null/undefined/invalid
+        if (
+          !fieldValue ||
+          (typeof fieldValue === "string" && !validEnumValues.includes(fieldValue))
+        ) {
+          fixedData[fieldName] = validEnumValues[0];
         }
       }
     }
 
-    // Apply dynamic fixes based on endpoint analysis (still needed for unique fields, etc.)
-    return this.applyDynamicFixes(testData, endpointAnalysis, seedData);
+    return fixedData;
+  }
+
+  /**
+   * Get valid enum values for a field from the schema
+   */
+  private getEnumValuesForField(
+    fieldName: string,
+    schema: z.ZodSchema<any>,
+    path: string,
+    method: string
+  ): string[] | null {
+    if (!schema || !(schema instanceof z.ZodObject)) return null;
+
+    const shape = schema.shape;
+    const fieldSchema = shape[fieldName];
+
+    if (!fieldSchema) return null;
+
+    // Check Zod enum
+    if (fieldSchema._def?.typeName === "ZodEnum") {
+      return fieldSchema._def.values;
+    }
+
+    // Check Zod union with literals (common enum pattern)
+    if (fieldSchema._def?.typeName === "ZodUnion") {
+      const options = fieldSchema._def.options;
+      if (options.every((opt: any) => opt._def?.typeName === "ZodLiteral")) {
+        return options.map((opt: any) => opt._def.value);
+      }
+    }
+
+    // Check OpenAPI enum (fallback)
+    const endpointDef = this.findEndpointDefinition(path, method);
+    if (endpointDef?.requestBody?.content?.["application/json"]?.schema) {
+      const openAPISchema = endpointDef.requestBody.content["application/json"].schema;
+      if (openAPISchema?.properties?.[fieldName]?.enum) {
+        return openAPISchema.properties[fieldName].enum;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Remove fields that should be auto-generated by the API
+   */
+  private removeAutoGeneratedFields(testData: any, _path: string, method: string): any {
+    if (!testData || typeof testData !== "object") return testData;
+
+    const cleanedData = { ...testData };
+
+    // Fields that should typically be auto-generated by the API
+    const autoGeneratedFields = [
+      "id",
+      "createdAt",
+      "updatedAt",
+      "status", // For creation endpoints
+      "version",
+      "uuid",
+      "timestamp",
+    ];
+
+    // Only remove these fields for POST requests (creation)
+    if (method === "POST") {
+      for (const field of autoGeneratedFields) {
+        if (field in cleanedData) {
+          delete cleanedData[field];
+        }
+      }
+    }
+
+    return cleanedData;
   }
 
   /**
@@ -1008,8 +1347,8 @@ export class UnifiedDynamicTester {
           }
         }
 
-        // Check for unique fields
-        if (this.isUniqueField(fieldName, field)) {
+        // Check for unique fields (using pattern-based detection for analysis)
+        if (this.isUniqueFieldByPattern(fieldName, field)) {
           if (!analysis.uniqueFields.includes(fieldName)) {
             analysis.uniqueFields.push(fieldName);
           }
@@ -1057,23 +1396,6 @@ export class UnifiedDynamicTester {
     };
 
     return fieldToResourceMap[baseName] || baseName;
-  }
-
-  /**
-   * Check if a field should be unique
-   */
-  private isUniqueField(fieldName: string, fieldSchema: any): boolean {
-    // Unique fields are typically:
-    // 1. Email addresses
-    // 2. Usernames
-    // 3. Fields with unique constraints
-
-    const isEmail =
-      fieldName.toLowerCase() === "email" || fieldSchema?.format === "email";
-    const isUsername = fieldName.toLowerCase() === "username";
-    const hasUniqueConstraint = fieldSchema?.unique === true;
-
-    return isEmail || isUsername || hasUniqueConstraint;
   }
 
   /**
@@ -1308,42 +1630,182 @@ export class UnifiedDynamicTester {
   private generateDynamicDefaults(resourceType: string): Record<string, any> {
     const defaults: Record<string, any> = {};
 
-    // Analyze common patterns for different resource types
-    switch (resourceType.toLowerCase()) {
-      case "products":
-      case "product":
-        defaults.name = "Test Product";
-        defaults.price = 29.99;
-        defaults.stockQuantity = 100;
-        defaults.description = "Test product description";
-        break;
+    // Find the schema for this resource type
+    const schema = this.findSchemaForResource(resourceType);
+    if (!schema) {
+      // Fallback: generate generic defaults based on resource type
+      return this.generateGenericDefaults(resourceType);
+    }
 
-      case "categories":
-      case "category":
-        defaults.name = "Test Category";
-        defaults.description = "Test category description";
-        break;
+    // Analyze the schema to generate appropriate defaults
+    const unwrapped = unwrapZodSchema(schema);
+    if (unwrapped instanceof z.ZodObject) {
+      const shape = unwrapped.shape;
 
-      case "users":
-      case "user":
-        defaults.name = "Test User";
-        defaults.email = generateUniqueEmail();
-        break;
+      for (const [fieldName, fieldSchema] of Object.entries(shape)) {
+        // Skip auto-generated fields and nested objects
+        if (this.shouldSkipFieldForDefaults(fieldName, fieldSchema)) {
+          continue;
+        }
 
-      case "orders":
-      case "order":
-        // Don't add status field for order creation - API should set it automatically
-        // Only add status for order updates
-        break;
-
-      default:
-        // For unknown resource types, use generic defaults
-        defaults.name = `Test ${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)}`;
-        defaults.description = `Test ${resourceType} description`;
-        break;
+        const unwrappedField = unwrapZodSchema(fieldSchema);
+        const defaultValue = this.generateDefaultValueForField(
+          fieldName,
+          unwrappedField,
+          resourceType
+        );
+        if (defaultValue !== undefined) {
+          defaults[fieldName] = defaultValue;
+        }
+      }
     }
 
     return defaults;
+  }
+
+  /**
+   * Determine if a field should be skipped when generating defaults
+   */
+  private shouldSkipFieldForDefaults(fieldName: string, fieldSchema: any): boolean {
+    const fieldNameLower = fieldName.toLowerCase();
+
+    // Skip auto-generated fields
+    if (
+      fieldNameLower === "id" ||
+      fieldNameLower === "createdat" ||
+      fieldNameLower === "updatedat"
+    ) {
+      return true;
+    }
+
+    // Skip reference fields that shouldn't be in update requests
+    if (
+      fieldNameLower === "userid" ||
+      fieldNameLower === "categoryid" ||
+      fieldNameLower === "productid" ||
+      fieldNameLower === "orderid"
+    ) {
+      return true;
+    }
+
+    // Skip nested object fields (they should be handled separately)
+    const unwrapped = unwrapZodSchema(fieldSchema);
+    if (unwrapped instanceof z.ZodObject) {
+      return true;
+    }
+
+    // Skip array fields (they should be handled separately)
+    if (unwrapped instanceof z.ZodArray) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Find the appropriate schema for a resource type
+   */
+  private findSchemaForResource(resourceType: string): z.ZodSchema<any> | null {
+    const resourceSingular = toSingular(resourceType);
+    const resourcePlural = resourceType.endsWith("s") ? resourceType : `${resourceType}s`;
+
+    // Look for schemas that match the resource type
+    for (const [schemaName, schema] of Object.entries(this.availableSchemas)) {
+      const nameLower = schemaName.toLowerCase();
+
+      // Check if schema name contains the resource (singular or plural)
+      const hasResourceMatch =
+        nameLower.includes(resourceType.toLowerCase()) ||
+        nameLower.includes(resourceSingular.toLowerCase()) ||
+        nameLower.includes(resourcePlural.toLowerCase());
+
+      if (hasResourceMatch) {
+        // Prefer schemas that are specifically for this resource
+        if (nameLower.includes("create") || nameLower.includes("request")) {
+          return schema;
+        }
+        // Fallback to any matching schema
+        return schema;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Generate a default value for a specific field based on its type and name
+   */
+  private generateDefaultValueForField(
+    fieldName: string,
+    fieldSchema: z.ZodTypeAny,
+    resourceType: string
+  ): any {
+    const fieldNameLower = fieldName.toLowerCase();
+
+    // Handle common field patterns
+    if (fieldNameLower.includes("name")) {
+      return `Test ${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)}`;
+    }
+
+    if (fieldNameLower.includes("description")) {
+      return `Test ${resourceType} description`;
+    }
+
+    if (fieldNameLower.includes("email")) {
+      return generateUniqueEmail();
+    }
+
+    if (fieldNameLower.includes("price")) {
+      return 29.99;
+    }
+
+    if (fieldNameLower.includes("quantity") || fieldNameLower.includes("stock")) {
+      return 100;
+    }
+
+    if (fieldNameLower.includes("status")) {
+      // Don't set status for order creation - API should set it automatically
+      return undefined;
+    }
+
+    // Handle field types
+    if (fieldSchema instanceof z.ZodString) {
+      if (fieldSchema._def.checks?.some((check: any) => check.kind === "email")) {
+        return generateUniqueEmail();
+      }
+      if (fieldSchema._def.checks?.some((check: any) => check.kind === "uuid")) {
+        return "00000000-0000-0000-0000-000000000000";
+      }
+      return `Test ${fieldName}`;
+    }
+
+    if (fieldSchema instanceof z.ZodNumber) {
+      return 42;
+    }
+
+    if (fieldSchema instanceof z.ZodBoolean) {
+      return true;
+    }
+
+    if (fieldSchema instanceof z.ZodArray) {
+      return [];
+    }
+
+    if (fieldSchema instanceof z.ZodObject) {
+      return {};
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Generate generic defaults for unknown resource types
+   */
+  private generateGenericDefaults(resourceType: string): Record<string, any> {
+    return {
+      name: `Test ${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)}`,
+      description: `Test ${resourceType} description`,
+    };
   }
 
   /**
@@ -1691,14 +2153,158 @@ export class UnifiedDynamicTester {
   private generateInvalidRequestExtraFields(schema: z.ZodSchema<any>): any {
     const baseData = this.generateFromSchemaShape(schema);
 
-    // Add extra fields
+    // Dynamically generate extra fields based on schema analysis
+    const extraFields = this.generateDynamicExtraFields(schema);
+
     return {
       ...baseData,
-      extraField1: "should not be allowed",
-      extraField2: 123,
-      extraField3: { nested: "object" },
-      extraField4: ["array", "of", "strings"],
+      ...extraFields,
     };
+  }
+
+  /**
+   * Dynamically generate extra fields for violation testing
+   */
+  private generateDynamicExtraFields(schema: z.ZodSchema<any>): Record<string, any> {
+    const extraFields: Record<string, any> = {};
+
+    // Analyze the schema to understand its structure
+    const schemaAnalysis = this.analyzeSchemaForExtraFieldGeneration(schema);
+
+    // Generate extra fields based on the analysis
+    const fieldCount = Math.min(3, schemaAnalysis.fieldCount + 1); // Add 1-3 extra fields
+
+    for (let i = 1; i <= fieldCount; i++) {
+      const fieldName = this.generateExtraFieldName(schemaAnalysis, i);
+      const fieldValue = this.generateExtraFieldValue(schemaAnalysis, i);
+      extraFields[fieldName] = fieldValue;
+    }
+
+    return extraFields;
+  }
+
+  /**
+   * Analyze schema to determine appropriate extra field generation strategy
+   */
+  private analyzeSchemaForExtraFieldGeneration(schema: z.ZodSchema<any>): {
+    fieldCount: number;
+    fieldTypes: string[];
+    resourceType: string;
+    hasNestedObjects: boolean;
+    hasArrays: boolean;
+  } {
+    const unwrapped = unwrapZodSchema(schema);
+
+    if (!(unwrapped instanceof z.ZodObject)) {
+      return {
+        fieldCount: 0,
+        fieldTypes: [],
+        resourceType: "unknown",
+        hasNestedObjects: false,
+        hasArrays: false,
+      };
+    }
+
+    const shape = unwrapped.shape;
+    const fieldNames = Object.keys(shape);
+    const fieldTypes: string[] = [];
+    let hasNestedObjects = false;
+    let hasArrays = false;
+
+    // Analyze field types
+    for (const [_fieldName, fieldSchema] of Object.entries(shape)) {
+      const unwrappedField = unwrapZodSchema(fieldSchema);
+
+      if (unwrappedField instanceof z.ZodString) {
+        fieldTypes.push("string");
+      } else if (unwrappedField instanceof z.ZodNumber) {
+        fieldTypes.push("number");
+      } else if (unwrappedField instanceof z.ZodBoolean) {
+        fieldTypes.push("boolean");
+      } else if (unwrappedField instanceof z.ZodObject) {
+        fieldTypes.push("object");
+        hasNestedObjects = true;
+      } else if (unwrappedField instanceof z.ZodArray) {
+        fieldTypes.push("array");
+        hasArrays = true;
+      } else {
+        fieldTypes.push("unknown");
+      }
+    }
+
+    // Infer resource type from field names
+    const resourceType = this.inferResourceTypeFromFieldNames(fieldNames);
+
+    return {
+      fieldCount: fieldNames.length,
+      fieldTypes,
+      resourceType,
+      hasNestedObjects,
+      hasArrays,
+    };
+  }
+
+  /**
+   * Infer resource type from field names
+   */
+  private inferResourceTypeFromFieldNames(fieldNames: string[]): string {
+    const commonPatterns = {
+      user: ["email", "password", "name", "role"],
+      product: ["name", "price", "description", "category"],
+      order: ["status", "items", "total", "customer"],
+      category: ["name", "description", "parent"],
+    };
+
+    for (const [resource, patterns] of Object.entries(commonPatterns)) {
+      const matches = patterns.filter((pattern) =>
+        fieldNames.some((field) => field.toLowerCase().includes(pattern))
+      );
+      if (matches.length >= 2) {
+        return resource;
+      }
+    }
+
+    return "unknown";
+  }
+
+  /**
+   * Generate appropriate extra field name
+   */
+  private generateExtraFieldName(_analysis: any, index: number): string {
+    const prefixes = ["extra", "additional", "custom", "test"];
+    const suffixes = ["Field", "Property", "Attribute", "Data"];
+
+    const prefix = prefixes[index % prefixes.length];
+    const suffix = suffixes[index % suffixes.length];
+
+    return `${prefix}${suffix}${index}`;
+  }
+
+  /**
+   * Generate appropriate extra field value based on schema analysis
+   */
+  private generateExtraFieldValue(_analysis: any, index: number): any {
+    const valueTypes = ["string", "number", "boolean", "object", "array"];
+    const typeIndex = index % valueTypes.length;
+    const type = valueTypes[typeIndex];
+
+    switch (type) {
+      case "string":
+        return `extra_value_${index}`;
+      case "number":
+        return 100 + index;
+      case "boolean":
+        return index % 2 === 0;
+      case "object":
+        return {
+          nested: `nested_value_${index}`,
+          count: index,
+        };
+      case "array":
+        return [`item_${index}`, `value_${index}`];
+      default:
+        return `default_extra_${index}`;
+    }
   }
 
   /**
@@ -1926,6 +2532,15 @@ export class UnifiedDynamicTester {
         parsedData = JSON.parse(responseData);
       } catch {
         parsedData = responseData;
+      }
+
+      // Track schema coverage for error responses
+      if (response.status >= 400 && response.status < 500) {
+        // Track Error schema coverage for 4xx responses
+        this.trackSchemaCoverage("Error");
+
+        // Also track endpoint coverage
+        this.trackEndpointCoverage(config.endpoint, config.method);
       }
 
       // Determine if violation was detected based on test type
@@ -2295,7 +2910,175 @@ export class UnifiedDynamicTester {
    * Track endpoint coverage
    */
   private trackEndpointCoverage(endpoint: string, method: string): void {
-    this.testedEndpoints.add(`${method} ${endpoint}`);
+    // Normalize the endpoint to match the original OpenAPI spec
+    const normalizedEndpoint = this.normalizeEndpointForCoverage(endpoint);
+    // Only track if the normalized endpoint exists in the OpenAPI spec
+    const existsInSpec = Object.keys(this.openAPISpec.paths).some((specPath) =>
+      this.pathsMatch(normalizedEndpoint, specPath)
+    );
+    if (existsInSpec) {
+      this.testedEndpoints.add(`${method} ${normalizedEndpoint}`);
+    }
+  }
+
+  /**
+   * Normalize endpoint path for coverage tracking
+   * This ensures we only track original endpoints from the OpenAPI spec
+   */
+  private normalizeEndpointForCoverage(endpoint: string): string {
+    // Get the original endpoint definition from OpenAPI spec
+    const originalEndpoint = this.findOriginalEndpointInSpec(endpoint);
+    if (originalEndpoint) {
+      return originalEndpoint;
+    }
+
+    // Fallback: dynamically replace test-specific path modifications
+    return this.dynamicallyNormalizeEndpoint(endpoint);
+  }
+
+  /**
+   * Find the original endpoint in the OpenAPI spec
+   */
+  private findOriginalEndpointInSpec(endpoint: string): string | null {
+    // Extract the base path without test modifications
+    const basePath = this.extractBasePathFromEndpoint(endpoint);
+
+    // Look for matching endpoint in OpenAPI spec
+    for (const [path, _methods] of Object.entries(this.openAPISpec.paths)) {
+      if (this.pathsMatch(basePath, path)) {
+        return path;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Extract base path from potentially modified endpoint
+   */
+  private extractBasePathFromEndpoint(endpoint: string): string {
+    // Remove common test modifications
+    let basePath = endpoint;
+
+    // Replace UUID patterns with parameter placeholders
+    basePath = basePath.replace(
+      /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+      "/{id}"
+    );
+
+    // Replace common test-specific modifications
+    basePath = basePath.replace(/\/invalid-uuid/g, "/{id}");
+    basePath = basePath.replace(/\/test-[^\/]+/g, "/{id}");
+    basePath = basePath.replace(/\/[0-9]+/g, "/{id}");
+
+    return basePath;
+  }
+
+  /**
+   * Check if two paths match (considering parameter placeholders)
+   */
+  private pathsMatch(path1: string, path2: string): boolean {
+    // Normalize both paths
+    const normalized1 = this.normalizePathForComparison(path1);
+    const normalized2 = this.normalizePathForComparison(path2);
+
+    return normalized1 === normalized2;
+  }
+
+  /**
+   * Normalize path for comparison by standardizing parameter placeholders
+   */
+  private normalizePathForComparison(path: string): string {
+    return path
+      .replace(/\{[^}]+\}/g, "{param}") // Replace all parameter placeholders with {param}
+      .replace(
+        /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+        "/{param}"
+      ) // Replace UUIDs
+      .replace(/\/invalid-uuid/g, "/{param}") // Replace test UUIDs
+      .replace(/\/test-[^\/]+/g, "/{param}") // Replace test patterns
+      .replace(/\/[0-9]+/g, "/{param}"); // Replace numeric IDs
+  }
+
+  /**
+   * Dynamically normalize endpoint based on OpenAPI spec patterns
+   */
+  private dynamicallyNormalizeEndpoint(endpoint: string): string {
+    // Analyze the endpoint to find path parameters
+    const pathParams = this.extractPathParametersFromEndpoint(endpoint);
+
+    let normalized = endpoint;
+
+    // Replace each path parameter with its original placeholder
+    for (const param of pathParams) {
+      const originalPlaceholder = this.findOriginalParameterPlaceholder(endpoint, param);
+      if (originalPlaceholder) {
+        normalized = normalized.replace(param.value, originalPlaceholder);
+      }
+    }
+
+    return normalized;
+  }
+
+  /**
+   * Extract path parameters from an endpoint
+   */
+  private extractPathParametersFromEndpoint(
+    endpoint: string
+  ): Array<{ name: string; value: string }> {
+    const params: Array<{ name: string; value: string }> = [];
+
+    // Match UUID patterns
+    const uuidMatches = endpoint.match(
+      /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+    );
+    if (uuidMatches) {
+      uuidMatches.forEach((match) => {
+        params.push({ name: "id", value: match });
+      });
+    }
+
+    // Match test patterns
+    const testMatches = endpoint.match(/\/invalid-uuid/g);
+    if (testMatches) {
+      testMatches.forEach((match) => {
+        params.push({ name: "id", value: match });
+      });
+    }
+
+    // Match numeric IDs
+    const numericMatches = endpoint.match(/\/[0-9]+/g);
+    if (numericMatches) {
+      numericMatches.forEach((match) => {
+        params.push({ name: "id", value: match });
+      });
+    }
+
+    return params;
+  }
+
+  /**
+   * Find the original parameter placeholder for a given parameter value
+   */
+  private findOriginalParameterPlaceholder(
+    endpoint: string,
+    _param: { name: string; value: string }
+  ): string | null {
+    // Look for the original endpoint definition in OpenAPI spec
+    const basePath = this.extractBasePathFromEndpoint(endpoint);
+
+    for (const [path, _methods] of Object.entries(this.openAPISpec.paths)) {
+      if (this.pathsMatch(basePath, path)) {
+        // Find the parameter in the original path
+        const paramMatch = path.match(/\{([^}]+)\}/);
+        if (paramMatch) {
+          return `{${paramMatch[1]}}`;
+        }
+      }
+    }
+
+    // Default to {id} if no match found
+    return "{id}";
   }
 
   /**
@@ -2798,3 +3581,31 @@ export class UnifiedDynamicTester {
 
 // Global instance for easy access
 export const unifiedTester = new UnifiedDynamicTester();
+
+// Utility to recursively unwrap ZodEffects and get the base schema
+function unwrapZodSchema(schema: any): any {
+  let current = schema;
+  // Unwrap ZodEffects, ZodOptional, ZodNullable, etc.
+  while (current && (current._def?.type || current._def?.schema)) {
+    if (current._def.type) {
+      current = current._def.type;
+    } else if (current._def.schema) {
+      current = current._def.schema;
+    } else {
+      break;
+    }
+  }
+  return current;
+}
+
+// Utility to get singular form of a resource (handles common English plurals)
+function toSingular(resource: string): string {
+  if (resource.endsWith("ies")) {
+    return `${resource.slice(0, -3)}y`; // categories -> category
+  } else if (resource.endsWith("ses")) {
+    return resource.slice(0, -2); // e.g., statuses -> status
+  } else if (resource.endsWith("s")) {
+    return resource.slice(0, -1); // products -> product
+  }
+  return resource;
+}

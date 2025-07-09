@@ -1,0 +1,278 @@
+
+> catalyst@0.1.0 test:unified-contract
+> tsx src/lib/testing/run-specific-tests.ts contract
+
+🔍 Discovered 25 Zod schemas: [
+  'CategoriesQuerySchema',
+  'CategoriesResponseSchema',
+  'CategorySchema',
+  'CategoryWithProductsSchema',
+  'CreateCategoryRequestSchema',
+  'CreateOrderRequestSchema',
+  'CreateProductRequestSchema',
+  'CreateUserRequestSchema',
+  'ErrorResponseSchema',
+  'OrderItemSchema',
+  'OrderItemWithProductSchema',
+  'OrderSchema',
+  'OrderStatusSchema',
+  'OrderWithItemsSchema',
+  'OrdersQuerySchema',
+  'OrdersResponseSchema',
+  'PaginatedProductsResponseSchema',
+  'PaginationQuerySchema',
+  'ProductSchema',
+  'ProductWithCategorySchema',
+  'ProductsQuerySchema',
+  'ProductsResponseSchema',
+  'UpdateOrderStatusRequestSchema',
+  'UpdateProductRequestSchema',
+  'UserSchema'
+]
+🚀 Unified Dynamic API Testing System
+==================================================
+🔗 Running contract tests only...
+🔍 Generating dynamic contract tests...
+📋 Found 13 endpoints in OpenAPI spec:
+   1. GET /api/products
+   2. POST /api/products
+   3. GET /api/products/{id}
+   4. PUT /api/products/{id}
+   5. GET /api/categories
+   6. POST /api/categories
+   7. GET /api/categories/{id}
+   8. GET /api/orders
+   9. POST /api/orders
+   10. GET /api/orders/{id}
+   11. PUT /api/orders/{id}/status
+   12. POST /api/users
+   13. GET /api/users/{id}
+   🔍 Mapping inline schema for Response for GET /api/products:
+      Resource: products, Method: GET
+      OpenAPI fields: data, page, pageSize, total, totalPages
+      Candidate Zod: CategoryWithProductsSchema
+         Zod fields: id, name, description, createdAt, updatedAt, products
+         Zod required: id, name, description, createdAt, updatedAt, products
+      Candidate Zod: CreateProductRequestSchema
+         Zod fields: name, description, price, stockQuantity, categoryId
+         Zod required: name, price, stockQuantity, categoryId
+      Candidate Zod: OrderItemWithProductSchema
+         Zod fields: id, orderId, productId, quantity, priceAtTime, createdAt, updatedAt, product
+         Zod required: id, orderId, productId, quantity, priceAtTime, createdAt, updatedAt, product
+      Candidate Zod: PaginatedProductsResponseSchema
+         Zod fields: data, page, pageSize, total, totalPages
+         Zod required: data, page, pageSize, total, totalPages
+      Candidate Zod: ProductSchema
+         Zod fields: id, name, description, price, stockQuantity, categoryId, createdAt, updatedAt
+         Zod required: id, name, description, price, stockQuantity, categoryId, createdAt, updatedAt
+      Candidate Zod: ProductWithCategorySchema
+         Zod fields: id, name, description, price, stockQuantity, categoryId, createdAt, updatedAt, category
+         Zod required: id, name, description, price, stockQuantity, categoryId, createdAt, updatedAt, category
+      Candidate Zod: ProductsQuerySchema
+         Zod fields: categoryId, search, minPrice, maxPrice, inStock
+         Zod required: 
+      ✅ Accepted by score: PaginatedProductsResponseSchema (score: 0.66)
+
+🔍 Analyzing GET /api/products:
+   Request Schema: ❌ Not found
+   Response Schema: ✅ Found
+   ✅ Added to contract tests
+   🔍 Mapping inline schema for Request for POST /api/products:
+      Resource: products, Method: POST
+      OpenAPI fields: name, description, price, stockQuantity, categoryId
+      Candidate Zod: CreateProductRequestSchema
+         Zod fields: name, description, price, stockQuantity, categoryId
+         Zod required: name, price, stockQuantity, categoryId
+      ✅ Accepted by score: CreateProductRequestSchema (score: 0.96)
+
+🔍 Analyzing POST /api/products:
+   Request Schema: ✅ Found
+   Response Schema: ❌ Not found
+   ✅ Added to contract tests
+
+🔍 Analyzing GET /api/products/{id}:
+   Request Schema: ❌ Not found
+   Response Schema: ❌ Not found
+   ❌ Skipped - no schemas found
+   🔍 Mapping inline schema for Request for PUT /api/products/{id}:
+      Resource: products, Method: PUT
+      OpenAPI fields: name, description, price, stockQuantity, categoryId
+      ❌ No match found for Request for PUT /api/products/{id}
+      ✅ Accepted by super fallback: CategoryWithProductsSchema
+
+🔍 Analyzing PUT /api/products/{id}:
+   Request Schema: ✅ Found
+   Response Schema: ❌ Not found
+   ✅ Added to contract tests
+
+🔍 Analyzing GET /api/categories:
+   Request Schema: ❌ Not found
+   Response Schema: ❌ Not found
+   ❌ Skipped - no schemas found
+   🔍 Mapping inline schema for Request for POST /api/categories:
+      Resource: categories, Method: POST
+      OpenAPI fields: name, description
+      ❌ No match found for Request for POST /api/categories
+      ✅ Accepted by super fallback: CategoriesQuerySchema
+
+🔍 Analyzing POST /api/categories:
+   Request Schema: ✅ Found
+   Response Schema: ❌ Not found
+   ✅ Added to contract tests
+
+🔍 Analyzing GET /api/categories/{id}:
+   Request Schema: ❌ Not found
+   Response Schema: ❌ Not found
+   ❌ Skipped - no schemas found
+
+🔍 Analyzing GET /api/orders:
+   Request Schema: ❌ Not found
+   Response Schema: ❌ Not found
+   ❌ Skipped - no schemas found
+   🔍 Mapping inline schema for Request for POST /api/orders:
+      Resource: orders, Method: POST
+      OpenAPI fields: userId, orderItems
+      Candidate Zod: CreateOrderRequestSchema
+         Zod fields: userId, orderItems
+         Zod required: userId, orderItems
+      ✅ Accepted by score: CreateOrderRequestSchema (score: 0.90)
+
+🔍 Analyzing POST /api/orders:
+   Request Schema: ✅ Found
+   Response Schema: ❌ Not found
+   ✅ Added to contract tests
+
+🔍 Analyzing GET /api/orders/{id}:
+   Request Schema: ❌ Not found
+   Response Schema: ❌ Not found
+   ❌ Skipped - no schemas found
+   🔍 Mapping inline schema for Request for PUT /api/orders/{id}/status:
+      Resource: orders, Method: PUT
+      OpenAPI fields: status
+      Candidate Zod: UpdateOrderStatusRequestSchema
+         Zod fields: status
+         Zod required: status
+      ✅ Accepted by score: UpdateOrderStatusRequestSchema (score: 0.80)
+
+🔍 Analyzing PUT /api/orders/{id}/status:
+   Request Schema: ✅ Found
+   Response Schema: ❌ Not found
+   ✅ Added to contract tests
+   🔍 Mapping inline schema for Request for POST /api/users:
+      Resource: users, Method: POST
+      OpenAPI fields: name, email, password, picture
+      Candidate Zod: CreateUserRequestSchema
+         Zod fields: name, email, password, picture
+         Zod required: name, email
+      ✅ Accepted by score: CreateUserRequestSchema (score: 0.90)
+
+🔍 Analyzing POST /api/users:
+   Request Schema: ✅ Found
+   Response Schema: ❌ Not found
+   ✅ Added to contract tests
+
+🔍 Analyzing GET /api/users/{id}:
+   Request Schema: ❌ Not found
+   Response Schema: ❌ Not found
+   ❌ Skipped - no schemas found
+
+📊 OpenAPI Endpoint to Zod Schema Mapping:
+================================================================================
+Endpoint                      Method  Request Schema           Response Schema          Mapping Type
+--------------------------------------------------------------------------------
+/api/products                 GET     N/A                      PaginatedProductsResponseSchemaResponse Only
+/api/products                 POST    CreateProductRequestSchemaN/A                      Request Only
+/api/products/{id}            GET     N/A                      N/A                      No Schema
+/api/products/{id}            PUT     CategoryWithProductsSchemaN/A                      Request Only
+/api/categories               GET     N/A                      N/A                      No Schema
+/api/categories               POST    CategoriesQuerySchema    N/A                      Request Only
+/api/categories/{id}          GET     N/A                      N/A                      No Schema
+/api/orders                   GET     N/A                      N/A                      No Schema
+/api/orders                   POST    CreateOrderRequestSchema N/A                      Request Only
+/api/orders/{id}              GET     N/A                      N/A                      No Schema
+/api/orders/{id}/status       PUT     UpdateOrderStatusRequestSchemaN/A                      Request Only
+/api/users                    POST    CreateUserRequestSchema  N/A                      Request Only
+/api/users/{id}               GET     N/A                      N/A                      No Schema
+================================================================================
+
+📋 Generated 7 contract test configurations
+🚀 Running 7 contract tests...
+✅ PASS GET /api/products
+✅ PASS POST /api/products
+✅ PASS PUT /api/products/{id}
+✅ PASS POST /api/categories
+✅ PASS POST /api/orders
+✅ PASS PUT /api/orders/{id}/status
+✅ PASS POST /api/users
+
+📋 Unified Dynamic Test Results:
+==================================================
+
+🔗 Contract Tests:
+1. ✅ PASS GET /api/products (200)
+   ⏱️  Response time: 35ms
+   🔍 Validation Steps:
+      ✅ JSON Response Parsing
+         📝 Response data successfully parsed as JSON
+      ✅ HTTP Status Code Validation
+         📝 Status code 200 is in expected range [200]
+      ✅ Response Schema Validation
+         📝 Response data conforms to expected schema
+2. ✅ PASS POST /api/products (200)
+   ⏱️  Response time: 19ms
+   🔍 Validation Steps:
+      ✅ JSON Response Parsing
+         📝 Response data successfully parsed as JSON
+      ✅ HTTP Status Code Validation
+         📝 Status code 200 is in expected range [201, 200]
+3. ✅ PASS PUT /api/products/{id} (200)
+   ⏱️  Response time: 20ms
+   🔍 Validation Steps:
+      ✅ JSON Response Parsing
+         📝 Response data successfully parsed as JSON
+      ✅ HTTP Status Code Validation
+         📝 Status code 200 is in expected range [200, 204]
+4. ✅ PASS POST /api/categories (201)
+   ⏱️  Response time: 18ms
+   🔍 Validation Steps:
+      ✅ JSON Response Parsing
+         📝 Response data successfully parsed as JSON
+      ✅ HTTP Status Code Validation
+         📝 Status code 201 is in expected range [201, 200]
+5. ✅ PASS POST /api/orders (201)
+   ⏱️  Response time: 20ms
+   🔍 Validation Steps:
+      ✅ JSON Response Parsing
+         📝 Response data successfully parsed as JSON
+      ✅ HTTP Status Code Validation
+         📝 Status code 201 is in expected range [201, 200]
+6. ✅ PASS PUT /api/orders/{id}/status (200)
+   ⏱️  Response time: 19ms
+   🔍 Validation Steps:
+      ✅ JSON Response Parsing
+         📝 Response data successfully parsed as JSON
+      ✅ HTTP Status Code Validation
+         📝 Status code 200 is in expected range [200, 204]
+7. ✅ PASS POST /api/users (200)
+   ⏱️  Response time: 18ms
+   🔍 Validation Steps:
+      ✅ JSON Response Parsing
+         📝 Response data successfully parsed as JSON
+      ✅ HTTP Status Code Validation
+         📝 Status code 200 is in expected range [201, 200]
+
+🚨 Violation Tests:
+
+📊 Summary:
+   Contract Tests: 7/7 passed (100.0%)
+   Violation Tests: 0/0 passed (0.0%)
+   Overall: 7/7 passed (100.0%)
+
+✅ All tests passed!
+Your API validation is working correctly.
+
+📊 Coverage Summary:
+   Endpoints: 13/13 (100.0%)
+   Schemas: 6/7 (85.7%)
+
+✅ All tests passed! Exiting with code 0.
