@@ -48,6 +48,7 @@ export interface ContractTestConfig {
   responseSchema?: z.ZodSchema<any> | null;
   testData?: any;
   expectedStatusCodes: number[];
+  pathOnly?: boolean;
 }
 
 export interface ValidationStep {
@@ -254,7 +255,7 @@ export class UnifiedDynamicTester {
     // Apply method-specific adjustments for contract tests (only 2xx status codes)
     this.adjustContractTestStatusCodes(config, endpoint);
 
-    // Map request body schema
+    // Map request body schema (for POST/PUT/PATCH)
     if (endpoint.requestBody?.content?.["application/json"]?.schema) {
       const requestSchema = endpoint.requestBody.content["application/json"].schema;
       if (requestSchema.$ref) {
@@ -279,6 +280,29 @@ export class UnifiedDynamicTester {
           endpoint.method,
           requestSchema
         );
+      }
+    }
+
+    // Map query parameter schemas (for GET requests)
+    if (endpoint.method === "GET") {
+      // Always try to find a query schema for GET requests, even if OpenAPI doesn't define query params
+      // This handles cases where the API supports query params not defined in OpenAPI spec
+      const querySchema = this.findQuerySchemaForEndpoint(endpoint.path, endpoint.method);
+      if (querySchema) {
+        config.requestSchema = querySchema;
+        // Track schema coverage
+        const schemaName = this.getSchemaName(querySchema);
+        if (schemaName) {
+          this.trackSchemaCoverage(schemaName);
+        }
+      } else {
+        // Check if this endpoint has path parameters but no query parameters
+        const hasPathParams = endpoint.parameters?.some((p: any) => p.in === "path");
+        if (hasPathParams) {
+          // Mark this as path-only for display purposes
+          config.requestSchema = null;
+          config.pathOnly = true;
+        }
       }
     }
 
@@ -679,7 +703,6 @@ export class UnifiedDynamicTester {
       // More precise method matching with fallbacks
       const isCreateRequest = method === "POST" && nameLower.includes("create");
       const isUpdateRequest = method === "PUT" && nameLower.includes("update");
-      const _isGetRequest = method === "GET";
       // For POST/PUT, require method-specific schemas; for GET, be more flexible
       if (method === "POST" && !isCreateRequest) {
         continue;
@@ -2234,6 +2257,45 @@ export class UnifiedDynamicTester {
   }
 
   /**
+   * Find query schema for a GET endpoint
+   */
+  private findQuerySchemaForEndpoint(
+    path: string,
+    _method: string
+  ): z.ZodSchema<any> | null {
+    // Extract resource name from path
+    const resourceMatch = path.match(/\/api\/([^\/]+)/);
+    if (!resourceMatch) return null;
+
+    const resource = resourceMatch[1];
+
+    // Handle both singular and plural resource names
+    const resourceSingular = resource.endsWith("s") ? resource.slice(0, -1) : resource;
+    const resourcePlural = resource.endsWith("s") ? resource : `${resource}s`;
+
+    // Look for query schemas that match the resource
+    for (const [schemaName, schema] of Object.entries(this.availableSchemas)) {
+      const nameLower = schemaName.toLowerCase();
+
+      // Check if schema name contains the resource (singular or plural) and is a query schema
+      const hasResourceMatch =
+        nameLower.includes(resource) ||
+        nameLower.includes(resourceSingular) ||
+        nameLower.includes(resourcePlural);
+
+      // Look for query-specific schemas
+      if (
+        hasResourceMatch &&
+        (nameLower.includes("query") || nameLower.includes("params"))
+      ) {
+        return schema;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Get request schema for endpoint
    */
   private getRequestSchema(path: string, method: string): z.ZodSchema<any> | null {
@@ -2981,12 +3043,14 @@ export class UnifiedDynamicTester {
 
     const endpoints = this.extractEndpoints();
     const results: ContractTestResult[] = [];
+    this.contractTestConfigs = []; // Clear previous configs
 
     for (const endpoint of endpoints) {
       try {
         const config = await this.generateContractTestConfig(endpoint);
 
         if (config.requestSchema || config.responseSchema) {
+          this.contractTestConfigs.push(config); // Track the config
           console.log(`\n🔗 Testing ${endpoint.method} ${endpoint.path}`);
           const result = await this.runContractTest(config);
           results.push(result);
@@ -3037,12 +3101,14 @@ export class UnifiedDynamicTester {
 
     const endpoints = this.extractEndpoints();
     const results: ViolationTestResult[] = [];
+    this.violationTestConfigs = []; // Clear previous configs
 
     for (const endpoint of endpoints) {
       try {
         const configs = this.generateViolationTestConfigs(endpoint);
 
         if (configs.length > 0) {
+          this.violationTestConfigs.push(...configs); // Track all configs
           console.log(
             `\n🚨 Testing ${endpoint.method} ${endpoint.path} (${configs.length} violation tests)`
           );
@@ -3259,6 +3325,9 @@ export class UnifiedDynamicTester {
       console.log("Your API validation is working correctly.");
     }
 
+    // Print schema mapping table
+    this.printSchemaMappingTable();
+
     // Print coverage summary
     const coverage = this.getCoverageStats();
     console.log(`\n📊 Coverage Summary:`);
@@ -3268,6 +3337,53 @@ export class UnifiedDynamicTester {
     console.log(
       `   Schemas: ${coverage.schemas.tested}/${coverage.schemas.total} (${coverage.schemas.coverage.toFixed(1)}%)`
     );
+  }
+
+  /**
+   * Print schema mapping table showing which schemas are used for which endpoints
+   */
+  private printSchemaMappingTable(): void {
+    console.log("\n🔗 Schema Mapping Table:");
+    console.log("=".repeat(80));
+    console.log(
+      `${"Endpoint".padEnd(30)} ${"Method".padEnd(8)} ${"Request Schema".padEnd(25)} ${"Response Schema".padEnd(25)}`
+    );
+    console.log("-".repeat(80));
+
+    // Group contract test configs by endpoint and method
+    const endpointMappings = new Map<string, ContractTestConfig>();
+
+    for (const config of this.contractTestConfigs) {
+      const key = `${config.method} ${config.endpoint}`;
+      endpointMappings.set(key, config);
+    }
+
+    // Sort by endpoint path
+    const sortedMappings = Array.from(endpointMappings.entries()).sort(([a], [b]) => {
+      const pathA = a.split(" ")[1];
+      const pathB = b.split(" ")[1];
+      return pathA.localeCompare(pathB);
+    });
+
+    for (const [endpointKey, config] of sortedMappings) {
+      const [method, endpoint] = endpointKey.split(" ", 2);
+      const requestSchemaName = config.pathOnly
+        ? "(path only)"
+        : this.getSchemaName(config.requestSchema || null);
+      const responseSchemaName = this.getSchemaName(config.responseSchema || null);
+      const _mappingType = this.getMappingType(
+        config.requestSchema || null,
+        config.responseSchema || null
+      );
+
+      console.log(
+        `${endpoint.padEnd(30)} ${method.padEnd(8)} ${(requestSchemaName || "None").padEnd(25)} ${(responseSchemaName || "None").padEnd(25)}`
+      );
+    }
+
+    if (sortedMappings.length === 0) {
+      console.log("No schema mappings found.");
+    }
   }
 
   /**
@@ -3926,7 +4042,7 @@ export class UnifiedDynamicTester {
    */
   private async validateServerConnection(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/test`, {
+      const response = await fetch(`${this.baseUrl}/health`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
         signal: AbortSignal.timeout(5000), // 5 second timeout
