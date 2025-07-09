@@ -179,9 +179,8 @@ This project uses GitHub Actions for continuous integration and deployment with 
 The CI pipeline includes:
 
 - **Build & Lint**: Code quality checks and project building
-- **Contract Tests**: API contract validation against OpenAPI specification
+- **Contract Tests**: API contract validation against OpenAPI specification using HeyAPI client
 - **Contract Violation Tests**: Verification that contract violations are detected
-- **Integration Tests**: End-to-end testing with coverage reporting
 
 ### Workflows
 

@@ -38,7 +38,6 @@ This repository uses GitHub Actions for continuous integration and deployment, w
 - Dedicated contract testing pipeline
 - PR comments with test results
 - Test artifact uploads
-- Integration tests with coverage reporting
 
 ## Contract Testing in CI
 
@@ -108,8 +107,8 @@ npm run test:contract
 # Run contract violation tests
 npm run test:violations
 
-# Run all tests
-npm test
+# Run HeyAPI tests (alternative command)
+npm run test:heyapi
 ```
 
 ## Test Results
