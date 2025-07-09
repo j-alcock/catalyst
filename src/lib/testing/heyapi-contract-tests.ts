@@ -23,7 +23,7 @@ const ProductSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().nullable(),
-  price: z.number().positive(),
+  price: z.string().or(z.number().positive()), // API returns string due to Prisma Decimal serialization
   stockQuantity: z.number().int().min(0),
   categoryId: z.string(),
   createdAt: z.string(),
@@ -39,7 +39,7 @@ const OrderItemSchema = z.object({
   orderId: z.string(),
   productId: z.string(),
   quantity: z.number().int().positive(),
-  price: z.number().positive(),
+  price: z.string().or(z.number().positive()), // API returns string due to Prisma Decimal serialization
 });
 
 const OrderItemWithProductSchema = OrderItemSchema.extend({
@@ -50,7 +50,7 @@ const OrderSchema = z.object({
   id: z.string(),
   userId: z.string(),
   status: z.enum(["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]),
-  total: z.number().positive(),
+  total: z.string().or(z.number().positive()), // API returns string due to Prisma Decimal serialization
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -121,6 +121,13 @@ export class HeyAPIContractTestSuite {
 
     // Print results
     contractTester.printResults();
+  }
+
+  /**
+   * Get test results from the contract tester
+   */
+  getResults() {
+    return contractTester.getResults();
   }
 
   /**

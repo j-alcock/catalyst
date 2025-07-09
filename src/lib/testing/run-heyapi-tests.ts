@@ -20,8 +20,20 @@ async function main() {
     // Run all HeyAPI contract tests
     await heyAPIContractTestSuite.runAllTests();
 
+    // Check if any tests failed
+    const results = heyAPIContractTestSuite.getResults();
+    const failedTests = results.filter((result: any) => !result.success);
+
     console.log(`\n${"=".repeat(60)}`);
-    console.log("✅ HeyAPI Contract Test Runner completed successfully!");
+
+    if (failedTests.length > 0) {
+      console.log(
+        `❌ HeyAPI Contract Test Runner failed: ${failedTests.length} test(s) failed`
+      );
+      process.exit(1);
+    } else {
+      console.log("✅ HeyAPI Contract Test Runner completed successfully!");
+    }
   } catch (error) {
     console.error("\n❌ HeyAPI Contract Test Runner failed:", error);
     process.exit(1);
