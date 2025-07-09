@@ -9,7 +9,6 @@ import {
   generateUniqueEmail,
   getItemByIndex,
   getTestData,
-  getValidOrderItem,
   getValidReferenceId,
 } from "./test-data";
 
@@ -788,16 +787,6 @@ export class UnifiedDynamicTester {
     // Apply test data fixes using seed data
     testData = await this.applyTestDataFixes(testData, path, method);
 
-    // Special handling for order creation with orderItems
-    if (path.includes("/orders") && method === "POST" && testData.orderItems) {
-      try {
-        const validOrderItem = await getValidOrderItem();
-        testData.orderItems = [validOrderItem];
-      } catch (error) {
-        console.warn("Failed to generate valid order items:", error);
-      }
-    }
-
     return testData;
   }
 
@@ -887,7 +876,8 @@ export class UnifiedDynamicTester {
   }
 
   /**
-   * Check if a field should be unique based on database schema analysis
+   * Check if a field should be unique based on database schema and Zod schema metadata only.
+   * If no metadata is available, returns false (does not guess).
    */
   private async isUniqueField(
     fieldName: string,
@@ -908,22 +898,7 @@ export class UnifiedDynamicTester {
       return true;
     }
 
-    // STEP 2: Check for common unique field patterns (fallback)
-    const uniquePatterns = [
-      /email/i,
-      /username/i,
-      /name/i,
-      /title/i,
-      /slug/i,
-      /code/i,
-      /identifier/i,
-    ];
-
-    if (uniquePatterns.some((pattern) => pattern.test(fieldName))) {
-      return true;
-    }
-
-    // STEP 3: Check if field has unique constraints in Zod schema
+    // STEP 2: Check if field has unique constraints in Zod schema
     if (fieldSchema._def?.typeName === "ZodString") {
       // Email format is typically unique
       if (
@@ -935,6 +910,7 @@ export class UnifiedDynamicTester {
       }
     }
 
+    // STEP 3: Do not fall back to pattern-based detection. If no metadata, return false.
     return false;
   }
 
@@ -1036,34 +1012,117 @@ export class UnifiedDynamicTester {
   }
 
   /**
-   * Check if a field should be unique based on pattern analysis (synchronous version for analysis)
+   * Dynamically determine if a field is unique based on schema metadata and OpenAPI only.
+   * If no OpenAPI or schema metadata is available, returns false (does not guess).
    */
-  private isUniqueFieldByPattern(fieldName: string, fieldSchema: any): boolean {
-    // Check for common unique field patterns
-    const uniquePatterns = [
-      /email/i,
-      /username/i,
-      /name/i,
-      /title/i,
-      /slug/i,
-      /code/i,
-      /identifier/i,
-    ];
-
-    // Check if field name matches unique patterns
-    if (uniquePatterns.some((pattern) => pattern.test(fieldName))) {
-      return true;
-    }
-
-    // Check if field has unique constraints in schema
-    if (fieldSchema?.type === "string") {
-      // Email format is typically unique
-      if (fieldSchema?.format === "email" || fieldSchema?.pattern) {
+  private isUniqueFieldByPattern(
+    fieldName: string,
+    fieldSchema: any,
+    path?: string,
+    method?: string
+  ): boolean {
+    // 1. Check OpenAPI schema for uniqueness
+    if (fieldSchema) {
+      // OpenAPI 3.1+ supports 'unique' or 'x-unique' for fields
+      if (fieldSchema.unique === true || fieldSchema["x-unique"] === true) {
+        return true;
+      }
+      // Some generators use 'isUnique' or 'uniqueItems' for arrays
+      if (fieldSchema.isUnique === true || fieldSchema.uniqueItems === true) {
+        return true;
+      }
+      // Prisma-style metadata (if present)
+      if (fieldSchema["@unique"] === true) {
         return true;
       }
     }
 
+    // 2. Check for Zod refinements indicating uniqueness
+    if (fieldSchema && typeof fieldSchema === "object" && fieldSchema._def) {
+      // Zod .refine() with uniqueness
+      if (fieldSchema._def.typeName === "ZodEffects" && fieldSchema._def.refinement) {
+        const refStr = fieldSchema._def.refinement.toString();
+        if (refStr.includes("unique") || refStr.includes("isUnique")) {
+          return true;
+        }
+      }
+      // Zod string with email (often unique)
+      if (fieldSchema._def.typeName === "ZodString") {
+        const checks = fieldSchema._def.checks || [];
+        if (checks.some((check: any) => check.kind === "email")) {
+          return true;
+        }
+      }
+    }
+
+    // 3. If path/method are provided, check request schema for unique fields
+    if (path && method) {
+      const requestSchema = this.getRequestSchema(path, method);
+      if (requestSchema && requestSchema instanceof z.ZodObject) {
+        const dbUniqueFields = this.getDatabaseUniqueFieldsSync(path, method);
+        if (dbUniqueFields.includes(fieldName)) {
+          return true;
+        }
+      }
+    }
+
+    // 4. Do not fall back to pattern-based detection. If no metadata, return false.
     return false;
+  }
+
+  /**
+   * Synchronous version of getDatabaseUniqueFields for pattern-based checks
+   */
+  private getDatabaseUniqueFieldsSync(path: string, _method: string): string[] {
+    // Extract resource type from path
+    const resourceMatch = path.match(/\/api\/([^\/]+)/);
+    if (!resourceMatch) return [];
+    const resourceType = resourceMatch[1].toLowerCase();
+    const uniqueFields: string[] = [];
+    try {
+      const fs = require("fs");
+      const pathModule = require("path");
+      const schemaPath = pathModule.join(process.cwd(), "prisma", "schema.prisma");
+      if (!fs.existsSync(schemaPath)) {
+        uniqueFields.push("id");
+        return uniqueFields;
+      }
+      const schemaContent = fs.readFileSync(schemaPath, "utf8");
+      const modelName = this.getModelNameFromResource(resourceType);
+      const modelRegex = new RegExp(`model\\s+${modelName}\\s*\\{[^}]*\\}`, "gs");
+      const modelMatch = schemaContent.match(modelRegex);
+      if (!modelMatch) {
+        uniqueFields.push("id");
+        return uniqueFields;
+      }
+      const modelDefinition = modelMatch[0];
+      const fieldRegex = /(\w+)\s+(\w+)(\s*\[.*?\])?/g;
+      let fieldMatch = fieldRegex.exec(modelDefinition);
+      while (fieldMatch !== null) {
+        const fieldName = fieldMatch[1];
+        const attributes = fieldMatch[3] || "";
+        if (attributes.includes("@id")) {
+          uniqueFields.push(fieldName);
+        } else if (attributes.includes("@unique")) {
+          uniqueFields.push(fieldName);
+        } else if (attributes.includes("@@unique")) {
+          const uniqueConstraintMatch = attributes.match(/@@unique\(\[([^\]]+)\]\)/);
+          if (uniqueConstraintMatch) {
+            const constraintFields = uniqueConstraintMatch[1]
+              .split(",")
+              .map((f) => f.trim());
+            uniqueFields.push(...constraintFields);
+          }
+        }
+        fieldMatch = fieldRegex.exec(modelDefinition);
+      }
+      if (uniqueFields.length === 0) {
+        uniqueFields.push("id");
+      }
+    } catch (_error) {
+      uniqueFields.push("id");
+    }
+    return uniqueFields;
   }
 
   /**
@@ -1507,7 +1566,7 @@ export class UnifiedDynamicTester {
         }
 
         // Check for unique fields (using pattern-based detection for analysis)
-        if (this.isUniqueFieldByPattern(fieldName, field)) {
+        if (this.isUniqueFieldByPattern(fieldName, field, path, method)) {
           if (!analysis.uniqueFields.includes(fieldName)) {
             analysis.uniqueFields.push(fieldName);
           }
