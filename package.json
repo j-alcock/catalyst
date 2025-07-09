@@ -17,19 +17,11 @@
     "migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",
     "generate:openapi": "prisma generate",
-    "test:contract": "tsx src/lib/testing/run-heyapi-tests.ts",
-    "test:contract-algorithmic": "tsx src/lib/testing/run-algorithmic-tests.ts",
-    "test:violations": "tsx src/lib/testing/run-violation-tests.ts",
-    "test:heyapi": "tsx src/lib/testing/run-heyapi-tests.ts",
-    "test:contract-auto": "tsx src/lib/testing/run-auto-contract-tests.ts",
-    "test:contract-dynamic": "tsx src/lib/testing/run-dynamic-contract-tests.ts",
-    "test:contract-demo": "tsx src/lib/testing/dynamic-demo.ts",
-    "test:violations-dynamic": "tsx src/lib/testing/run-dynamic-violation-tests.ts",
     "test:unified": "tsx src/lib/testing/run-unified-tests.ts",
     "test:unified-contract": "tsx src/lib/testing/run-specific-tests.ts contract",
     "test:unified-violation": "tsx src/lib/testing/run-specific-tests.ts violation",
     "test:unified-all": "tsx src/lib/testing/run-specific-tests.ts both",
-    "test:openapi-only": "tsx src/lib/testing/run-openapi-only-tests.ts"
+    "test:assignment": "tsx src/lib/testing/run-contract-tester.ts && tsx src/lib/testing/run-violation-tests.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
