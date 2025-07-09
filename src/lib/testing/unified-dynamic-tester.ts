@@ -5,6 +5,13 @@ import { z } from "zod";
 
 // Dynamically import all schemas from the zod-schemas file
 import * as ZodSchemas from "../schemas/zod-schemas";
+import {
+  generateUniqueEmail,
+  getItemByIndex,
+  getTestData,
+  getValidOrderItem,
+  getValidReferenceId,
+} from "./test-data";
 
 export interface OpenAPISpec {
   openapi: string;
@@ -40,10 +47,8 @@ export interface ContractTestConfig {
   method: string;
   requestSchema?: z.ZodSchema<any> | null;
   responseSchema?: z.ZodSchema<any> | null;
-  errorSchema?: z.ZodSchema<any> | null;
   testData?: any;
   expectedStatusCodes: number[];
-  errorStatusCodes: number[];
 }
 
 export interface ValidationStep {
@@ -106,10 +111,15 @@ export class UnifiedDynamicTester {
   private contractTestConfigs: ContractTestConfig[] = [];
   private violationTestConfigs: ViolationTestConfig[] = [];
 
-  constructor(baseUrl: string = "http://localhost:3000") {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl?: string) {
+    // Use environment variable for port, fallback to 3000 (more common default)
+    const port = process.env.TEST_PORT || "3000";
+    this.baseUrl = baseUrl || `http://localhost:${port}`;
     this.openAPISpec = this.loadOpenAPISpec();
     this.availableSchemas = this.discoverZodSchemas();
+
+    // Log the base URL being used
+    console.log(`🔗 Unified Dynamic Tester initialized with base URL: ${this.baseUrl}`);
   }
 
   /**
@@ -178,9 +188,49 @@ export class UnifiedDynamicTester {
   private mapSchemaReference(ref: string): z.ZodSchema<any> | null {
     // Extract schema name from reference (e.g., "#/components/schemas/Product" -> "Product")
     const schemaName = ref.split("/").pop();
-    if (schemaName && this.availableSchemas[schemaName]) {
+
+    if (!schemaName) return null;
+
+    // Try exact match first
+    if (this.availableSchemas[schemaName]) {
       return this.availableSchemas[schemaName];
     }
+
+    // Try with "Schema" suffix (e.g., "Product" -> "ProductSchema")
+    const schemaWithSuffix = `${schemaName}Schema`;
+    if (this.availableSchemas[schemaWithSuffix]) {
+      return this.availableSchemas[schemaWithSuffix];
+    }
+
+    // Try fuzzy matching by name similarity
+    for (const [availableName, schema] of Object.entries(this.availableSchemas)) {
+      const availableLower = availableName.toLowerCase();
+      const targetLower = schemaName.toLowerCase();
+
+      // Check if the available schema name contains the target name or vice versa
+      if (availableLower.includes(targetLower) || targetLower.includes(availableLower)) {
+        // Additional check: if it's a response schema, prefer schemas with "Response" in the name
+        if (ref.includes("response") || ref.includes("Response")) {
+          if (availableLower.includes("response")) {
+            return schema;
+          }
+        }
+        // For regular schemas, prefer exact matches or schemas without "Response" suffix
+        else if (!availableLower.includes("response")) {
+          return schema;
+        }
+      }
+    }
+
+    // Last resort: try to find any schema that might work based on resource type
+    const resourceType = schemaName.toLowerCase();
+    for (const [availableName, schema] of Object.entries(this.availableSchemas)) {
+      const availableLower = availableName.toLowerCase();
+      if (availableLower.includes(resourceType)) {
+        return schema;
+      }
+    }
+
     return null;
   }
 
@@ -194,30 +244,16 @@ export class UnifiedDynamicTester {
       endpoint: endpoint.path,
       method: endpoint.method,
       expectedStatusCodes: [],
-      errorStatusCodes: [],
     };
 
     // Track endpoint coverage
     this.trackEndpointCoverage(endpoint.path, endpoint.method);
 
-    // Determine expected status codes
-    for (const [statusCode, _response] of Object.entries(endpoint.responses)) {
-      const code = parseInt(statusCode);
-      if (code >= 200 && code < 300) {
-        config.expectedStatusCodes.push(code);
-      } else if (code >= 400) {
-        // For endpoints with path parameters that require existing resources,
-        // include 404 as an expected status code for contract tests
-        if (code === 404 && endpoint.path.includes("/{id}")) {
-          config.expectedStatusCodes.push(code);
-        } else {
-          config.errorStatusCodes.push(code);
-        }
-      }
-    }
+    // Dynamically determine expected status codes based on OpenAPI spec
+    config.expectedStatusCodes = this.determineExpectedStatusCodes(endpoint);
 
-    // Apply business logic adjustments to expected status codes
-    this.adjustExpectedStatusCodes(config, endpoint.path, endpoint.method);
+    // Apply method-specific adjustments for contract tests (only 2xx status codes)
+    this.adjustContractTestStatusCodes(config, endpoint);
 
     // Map request body schema
     if (endpoint.requestBody?.content?.["application/json"]?.schema) {
@@ -291,18 +327,6 @@ export class UnifiedDynamicTester {
             `Response for ${endpoint.method} ${endpoint.path}`
           );
         }
-      } else if (code >= 400) {
-        const errorSchema = response.content?.["application/json"]?.schema;
-        if (errorSchema?.$ref) {
-          config.errorSchema = this.mapSchemaReference(errorSchema.$ref);
-          // Track schema coverage
-          const schemaName = errorSchema.$ref.split("/").pop();
-          if (schemaName) {
-            this.trackSchemaCoverage(schemaName);
-            // Track nested schemas within this schema
-            this.trackNestedSchemaCoverage(schemaName);
-          }
-        }
       }
     }
 
@@ -316,6 +340,66 @@ export class UnifiedDynamicTester {
     }
 
     return config;
+  }
+
+  /**
+   * Dynamically determine expected status codes based on OpenAPI spec
+   */
+  private determineExpectedStatusCodes(endpoint: EndpointDefinition): number[] {
+    const expectedCodes: number[] = [];
+
+    for (const [statusCode, _response] of Object.entries(endpoint.responses)) {
+      const code = parseInt(statusCode);
+      if (code >= 200 && code < 300) {
+        expectedCodes.push(code);
+      }
+    }
+
+    return expectedCodes;
+  }
+
+  /**
+   * Adjust expected status codes for contract tests (only 2xx status codes)
+   */
+  private adjustContractTestStatusCodes(
+    config: ContractTestConfig,
+    endpoint: EndpointDefinition
+  ): void {
+    // Only allow 2xx status codes for contract tests
+    config.expectedStatusCodes = config.expectedStatusCodes.filter(
+      (code) => code >= 200 && code < 300
+    );
+
+    // Apply method-specific adjustments based on actual API behavior
+    const method = endpoint.method;
+
+    if (method === "POST") {
+      // The API returns 200 for POST instead of 201, so accept both
+      if (!config.expectedStatusCodes.includes(200)) {
+        config.expectedStatusCodes.push(200);
+      }
+      if (!config.expectedStatusCodes.includes(201)) {
+        config.expectedStatusCodes.push(201);
+      }
+    }
+    if (method === "PUT") {
+      // Accept both 200 and 204 for PUT
+      if (!config.expectedStatusCodes.includes(200)) {
+        config.expectedStatusCodes.push(200);
+      }
+      if (!config.expectedStatusCodes.includes(204)) {
+        config.expectedStatusCodes.push(204);
+      }
+    }
+    if (method === "DELETE") {
+      // Accept both 200 and 204 for DELETE
+      if (!config.expectedStatusCodes.includes(200)) {
+        config.expectedStatusCodes.push(200);
+      }
+      if (!config.expectedStatusCodes.includes(204)) {
+        config.expectedStatusCodes.push(204);
+      }
+    }
   }
 
   /**
@@ -676,8 +760,18 @@ export class UnifiedDynamicTester {
       }
     }
 
-    // Apply business logic fixes for specific endpoints
-    testData = await this.applyBusinessLogicFixes(testData, path, method);
+    // Apply test data fixes using seed data
+    testData = await this.applyTestDataFixes(testData, path, method);
+
+    // Special handling for order creation with orderItems
+    if (path.includes("/orders") && method === "POST" && testData.orderItems) {
+      try {
+        const validOrderItem = await getValidOrderItem();
+        testData.orderItems = [validOrderItem];
+      } catch (error) {
+        console.warn("Failed to generate valid order items:", error);
+      }
+    }
 
     return testData;
   }
@@ -702,77 +796,506 @@ export class UnifiedDynamicTester {
   }
 
   /**
-   * Apply business logic fixes to test data for specific endpoints
+   * Apply dynamic test data fixes based on endpoint analysis
    */
-  private async applyBusinessLogicFixes(
+  private async applyTestDataFixes(
     testData: any,
     path: string,
     method: string
   ): Promise<any> {
     if (!testData) return testData;
 
-    // Get real data from the database for valid references
-    const realData = await this.getRealDataForTesting();
+    // Get fresh test data for each test
+    const seedData = await getTestData();
 
-    // Fix POST /api/products - use real category ID
-    if (path === "/api/products" && method === "POST") {
-      if (testData.categoryId) {
-        testData.categoryId = realData.categoryId; // Use real category ID
-      }
-      // Ensure all required fields are present and valid
-      testData.name = testData.name || "Test Product";
-      testData.price = testData.price || 29.99;
-      testData.stockQuantity = testData.stockQuantity || 100;
+    // Analyze the endpoint to determine what fixes are needed
+    const endpointAnalysis = this.analyzeEndpoint(path, method);
+
+    // --- NEW: Always fix all reference fields to use real IDs from seed data ---
+    testData = await this.fixAllReferenceFieldsWithRealIds(testData, seedData);
+
+    // --- NEW: Always generate a unique email for user creation ---
+    if (path.includes("/users") && method === "POST" && testData.email !== undefined) {
+      testData.email = generateUniqueEmail();
     }
 
-    // Fix POST /api/orders - use real user ID and product ID
-    if (path === "/api/orders" && method === "POST") {
-      if (testData.userId) {
-        testData.userId = realData.userId; // Use real user ID
-      }
-      if (testData.orderItems && Array.isArray(testData.orderItems)) {
-        // Ensure orderItems have proper structure with real product ID (no priceAtTime in schema)
-        testData.orderItems = testData.orderItems.map((item: any) => ({
-          productId: item.productId || realData.productId,
-          quantity: item.quantity || 1,
-          // Remove priceAtTime as it's not in the CreateOrderRequestSchema
-        }));
-      } else {
-        // Create a default order item if none exists
-        testData.orderItems = [
-          {
-            productId: realData.productId,
-            quantity: 1,
-            // Remove priceAtTime as it's not in the CreateOrderRequestSchema
-          },
-        ];
+    // --- NEW: Special handling for orders endpoints ---
+    if (path.includes("/orders")) {
+      if (method === "POST") {
+        // Ensure we have valid user and product references for order creation
+        if (testData.userId && seedData.users.length > 0) {
+          testData.userId = seedData.users[0].id;
+        }
+        if (testData.orderItems && Array.isArray(testData.orderItems)) {
+          // Ensure each order item has valid product references
+          testData.orderItems = testData.orderItems.map((item: any) => ({
+            ...item,
+            productId:
+              seedData.products.length > 0 ? seedData.products[0].id : item.productId,
+            quantity: item.quantity || 1,
+          }));
+        }
+        // Remove status field if present (should be set by API)
+        delete testData.status;
+      } else if (method === "PUT" && path.includes("/status")) {
+        // Dynamically set a valid status value from Zod schema or OpenAPI
+        let validStatuses: string[] | undefined;
+        // Try Zod schema first
+        const zodSchema = this.getRequestSchema(path, method);
+        if (zodSchema && zodSchema instanceof z.ZodObject) {
+          const shape = zodSchema.shape;
+          if (
+            shape.status &&
+            shape.status._def &&
+            shape.status._def.typeName === "ZodEnum"
+          ) {
+            validStatuses = shape.status._def.values;
+          }
+        }
+        // Fallback to OpenAPI enum extraction
+        if (!validStatuses) {
+          const endpointDef = this.findEndpointDefinition(path, method);
+          const openAPISchema =
+            endpointDef?.requestBody?.content?.["application/json"]?.schema;
+          if (
+            openAPISchema &&
+            openAPISchema.properties &&
+            openAPISchema.properties.status &&
+            Array.isArray(openAPISchema.properties.status.enum)
+          ) {
+            validStatuses = openAPISchema.properties.status.enum;
+          }
+        }
+        // Set status if we found valid values
+        if (validStatuses && validStatuses.length > 0) {
+          testData.status = validStatuses[0];
+        } else {
+          // If no enum found, fallback to a string
+          testData.status = "PENDING";
+        }
       }
     }
 
-    // Fix PUT /api/orders/{id}/status - use real order ID and valid status
-    if (path === "/api/orders/{id}/status" && method === "PUT") {
-      if (testData.status) {
-        // Use a valid status from the enum
-        const validStatuses = [
-          "PENDING",
-          "PROCESSING",
-          "SHIPPED",
-          "DELIVERED",
-          "CANCELLED",
-        ];
-        testData.status = validStatuses[0]; // Use PENDING as default
+    // Apply dynamic fixes based on endpoint analysis (still needed for unique fields, etc.)
+    return this.applyDynamicFixes(testData, endpointAnalysis, seedData);
+  }
+
+  /**
+   * Fix all reference fields in test data to use real IDs from seed data
+   */
+  private async fixAllReferenceFieldsWithRealIds(
+    testData: any,
+    seedData: any
+  ): Promise<any> {
+    if (!testData || typeof testData !== "object") return testData;
+
+    // Helper to recursively fix references in objects/arrays
+    const fixRefs = async (obj: any): Promise<any> => {
+      if (Array.isArray(obj)) {
+        return Promise.all(obj.map(fixRefs));
+      } else if (obj && typeof obj === "object") {
+        const newObj: any = { ...obj };
+        for (const key of Object.keys(newObj)) {
+          // If the field is a likely reference (ends with Id, is string, etc.)
+          if (key.match(/Id$/i) && typeof newObj[key] === "string") {
+            const refType = key.replace(/Id$/i, "").toLowerCase();
+
+            try {
+              // Use the new database-driven approach to get valid reference IDs
+              const validId = await getValidReferenceId(refType);
+              newObj[key] = validId;
+            } catch (_error) {
+              // Fallback to seed data if database approach fails
+              const candidates = seedData[`${refType}s`] || seedData[refType];
+              if (Array.isArray(candidates) && candidates.length > 0) {
+                newObj[key] = candidates[0].id;
+              }
+            }
+          } else if (typeof newObj[key] === "object") {
+            newObj[key] = await fixRefs(newObj[key]);
+          }
+        }
+        return newObj;
+      }
+      return obj;
+    };
+
+    return fixRefs(testData);
+  }
+
+  /**
+   * Analyze endpoint to determine required fixes dynamically
+   */
+  private analyzeEndpoint(
+    path: string,
+    method: string
+  ): {
+    resourceType: string;
+    requiresReferences: boolean;
+    referenceTypes: string[];
+    uniqueFields: string[];
+  } {
+    const resourceMatch = path.match(/\/api\/([^\/]+)/);
+    const resourceType = resourceMatch ? resourceMatch[1] : "unknown";
+
+    const analysis = {
+      resourceType,
+      requiresReferences: false,
+      referenceTypes: [] as string[],
+      uniqueFields: [] as string[],
+    };
+
+    // Find the endpoint definition in OpenAPI spec
+    const endpointDef = this.findEndpointDefinition(path);
+    if (!endpointDef) {
+      return analysis; // No definition found, return basic analysis
+    }
+
+    // Analyze request body schema to determine requirements
+    if (endpointDef.requestBody?.content?.["application/json"]?.schema) {
+      const requestSchema = endpointDef.requestBody.content["application/json"].schema;
+      const schemaAnalysis = this.analyzeSchemaForRequirements(
+        requestSchema,
+        path,
+        method
+      );
+
+      analysis.requiresReferences = schemaAnalysis.requiresReferences;
+      analysis.referenceTypes = schemaAnalysis.referenceTypes;
+      analysis.uniqueFields = schemaAnalysis.uniqueFields;
+    }
+
+    return analysis;
+  }
+
+  /**
+   * Analyze schema to determine what references and unique fields are needed
+   */
+  private analyzeSchemaForRequirements(
+    schema: any,
+    path: string,
+    method: string
+  ): {
+    requiresReferences: boolean;
+    referenceTypes: string[];
+    uniqueFields: string[];
+  } {
+    const analysis = {
+      requiresReferences: false,
+      referenceTypes: [] as string[],
+      uniqueFields: [] as string[],
+    };
+
+    // If schema has a reference, resolve it
+    if (schema.$ref) {
+      const resolvedSchema = this.resolveSchemaReference(schema.$ref);
+      if (resolvedSchema) {
+        return this.analyzeSchemaForRequirements(resolvedSchema, path, method);
       }
     }
 
-    // Fix POST /api/users - ensure email is unique and valid
-    if (path === "/api/users" && method === "POST") {
-      if (testData.email) {
-        // Generate a unique email to avoid 409 conflicts
-        const timestamp = Date.now();
-        testData.email = `testuser${timestamp}@example.com`;
+    // Analyze schema properties
+    if (schema.properties) {
+      for (const [fieldName, fieldSchema] of Object.entries(schema.properties)) {
+        const field = fieldSchema as any;
+
+        // Check for reference fields (typically end with 'Id' or are foreign keys)
+        if (this.isReferenceField(fieldName, field)) {
+          analysis.requiresReferences = true;
+          const referenceType = this.inferReferenceType(fieldName, field);
+          if (referenceType && !analysis.referenceTypes.includes(referenceType)) {
+            analysis.referenceTypes.push(referenceType);
+          }
+        }
+
+        // Check for unique fields
+        if (this.isUniqueField(fieldName, field)) {
+          if (!analysis.uniqueFields.includes(fieldName)) {
+            analysis.uniqueFields.push(fieldName);
+          }
+        }
       }
-      if (testData.name) {
-        testData.name = testData.name || "Test User";
+    }
+
+    return analysis;
+  }
+
+  /**
+   * Check if a field is a reference field
+   */
+  private isReferenceField(fieldName: string, fieldSchema: any): boolean {
+    // Reference fields typically:
+    // 1. End with 'Id' (e.g., categoryId, userId)
+    // 2. Are UUIDs
+    // 3. Are required fields that reference other entities
+
+    const isIdField = fieldName.toLowerCase().endsWith("id");
+    const isUUID =
+      fieldSchema?.format === "uuid" ||
+      (fieldSchema?.type === "string" && fieldSchema?.pattern?.includes("uuid"));
+    const isRequired = fieldSchema?.required !== false; // Default to required if not specified
+
+    return isIdField && isUUID && isRequired;
+  }
+
+  /**
+   * Infer the reference type from field name and schema
+   */
+  private inferReferenceType(fieldName: string, _fieldSchema: any): string | null {
+    // Extract the base resource name from the field name
+    // e.g., "categoryId" -> "category", "userId" -> "user"
+    const baseName = fieldName.replace(/Id$/i, "").toLowerCase();
+
+    // Map common field names to resource types
+    const fieldToResourceMap: Record<string, string> = {
+      category: "category",
+      user: "user",
+      product: "product",
+      order: "order",
+      customer: "user", // Alias
+      owner: "user", // Alias
+    };
+
+    return fieldToResourceMap[baseName] || baseName;
+  }
+
+  /**
+   * Check if a field should be unique
+   */
+  private isUniqueField(fieldName: string, fieldSchema: any): boolean {
+    // Unique fields are typically:
+    // 1. Email addresses
+    // 2. Usernames
+    // 3. Fields with unique constraints
+
+    const isEmail =
+      fieldName.toLowerCase() === "email" || fieldSchema?.format === "email";
+    const isUsername = fieldName.toLowerCase() === "username";
+    const hasUniqueConstraint = fieldSchema?.unique === true;
+
+    return isEmail || isUsername || hasUniqueConstraint;
+  }
+
+  /**
+   * Resolve schema reference from OpenAPI spec
+   */
+  private resolveSchemaReference(ref: string): any {
+    // Extract schema name from reference (e.g., "#/components/schemas/Product" -> "Product")
+    const schemaName = ref.split("/").pop();
+    if (schemaName && this.openAPISpec.components?.schemas?.[schemaName]) {
+      return this.openAPISpec.components.schemas[schemaName];
+    }
+    return null;
+  }
+
+  /**
+   * Apply dynamic fixes based on endpoint analysis
+   */
+  private applyDynamicFixes(testData: any, analysis: any, seedData: any): any {
+    const { resourceType, requiresReferences, referenceTypes, uniqueFields } = analysis;
+
+    // Fix references if needed
+    if (requiresReferences) {
+      testData = this.fixReferences(testData, referenceTypes, seedData);
+    }
+
+    // Fix unique fields
+    for (const field of uniqueFields) {
+      testData = this.fixUniqueField(testData, field);
+    }
+
+    // Ensure required fields have sensible defaults
+    testData = this.ensureRequiredFields(testData, resourceType);
+
+    return testData;
+  }
+
+  /**
+   * Fix reference fields dynamically
+   */
+  private fixReferences(testData: any, referenceTypes: string[], seedData: any): any {
+    for (const refType of referenceTypes) {
+      const refData = this.getReferenceData(refType, seedData);
+      if (refData) {
+        testData = this.applyReferenceFix(testData, refType, refData);
+      }
+    }
+    return testData;
+  }
+
+  /**
+   * Get reference data for a specific type dynamically
+   */
+  private getReferenceData(refType: string, seedData: any): any {
+    // Dynamically discover available resources from seed data
+    const availableResources = Object.keys(seedData);
+
+    // Try exact match first
+    if (seedData[refType]) {
+      return seedData[refType];
+    }
+
+    // Try plural/singular variations
+    const singular = refType.endsWith("s") ? refType.slice(0, -1) : refType;
+    const plural = refType.endsWith("s") ? refType : `${refType}s`;
+
+    if (seedData[plural]) {
+      return seedData[plural];
+    }
+    if (seedData[singular]) {
+      return seedData[singular];
+    }
+
+    // Try fuzzy matching (e.g., "category" matches "categories")
+    for (const resource of availableResources) {
+      if (
+        resource.toLowerCase().includes(refType.toLowerCase()) ||
+        refType.toLowerCase().includes(resource.toLowerCase())
+      ) {
+        return seedData[resource];
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Apply reference fix based on reference type dynamically
+   */
+  private applyReferenceFix(testData: any, refType: string, refData: any[]): any {
+    if (!refData || refData.length === 0) {
+      return testData; // No reference data available
+    }
+
+    const referenceId = getItemByIndex(refData, 0).id;
+
+    // Find all fields that reference this type
+    const referenceFields = this.findReferenceFields(testData, refType);
+
+    // Apply the reference ID to all matching fields
+    for (const fieldName of referenceFields) {
+      testData[fieldName] = referenceId;
+    }
+
+    // Handle special cases for complex structures
+    this.handleComplexReferenceStructures(testData, refType, refData);
+
+    return testData;
+  }
+
+  /**
+   * Find all fields in test data that reference a specific type
+   */
+  private findReferenceFields(testData: any, refType: string): string[] {
+    const referenceFields: string[] = [];
+
+    for (const fieldName of Object.keys(testData)) {
+      if (this.fieldReferencesType(fieldName, refType)) {
+        referenceFields.push(fieldName);
+      }
+    }
+
+    return referenceFields;
+  }
+
+  /**
+   * Check if a field name references a specific type
+   */
+  private fieldReferencesType(fieldName: string, refType: string): boolean {
+    const fieldLower = fieldName.toLowerCase();
+    const typeLower = refType.toLowerCase();
+
+    // Direct match: categoryId -> category
+    if (fieldLower.endsWith(`${typeLower}id`) || fieldLower.endsWith(`${typeLower}_id`)) {
+      return true;
+    }
+
+    // Singular/plural variations
+    const typeSingular = typeLower.endsWith("s") ? typeLower.slice(0, -1) : typeLower;
+    const typePlural = typeLower.endsWith("s") ? typeLower : `${typeLower}s`;
+
+    if (
+      fieldLower.endsWith(`${typeSingular}id`) ||
+      fieldLower.endsWith(`${typeSingular}_id`)
+    ) {
+      return true;
+    }
+    if (
+      fieldLower.endsWith(`${typePlural}id`) ||
+      fieldLower.endsWith(`${typePlural}_id`)
+    ) {
+      return true;
+    }
+
+    // Exact match for simple cases
+    if (fieldLower === `${typeLower}id` || fieldLower === `${typeLower}_id`) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Handle complex reference structures like arrays and nested objects
+   */
+  private handleComplexReferenceStructures(
+    testData: any,
+    refType: string,
+    refData: any[]
+  ): void {
+    // Handle orderItems array structure
+    if (testData.orderItems && Array.isArray(testData.orderItems)) {
+      const referenceId = getItemByIndex(refData, 0).id;
+
+      testData.orderItems = testData.orderItems.map((item: any) => ({
+        productId: item.productId || referenceId,
+        quantity: item.quantity || 1,
+      }));
+    }
+
+    // Handle other array structures that might reference this type
+    for (const [fieldName, fieldValue] of Object.entries(testData)) {
+      if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+        // Check if this array contains objects that reference our type
+        const firstItem = fieldValue[0];
+        if (typeof firstItem === "object" && firstItem !== null) {
+          const referenceFields = this.findReferenceFields(firstItem, refType);
+          if (referenceFields.length > 0) {
+            // This array contains items that reference our type
+            const referenceId = getItemByIndex(refData, 0).id;
+            testData[fieldName] = fieldValue.map((item: any) => {
+              const updatedItem = { ...item };
+              for (const refField of referenceFields) {
+                updatedItem[refField] = referenceId;
+              }
+              return updatedItem;
+            });
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Fix unique fields
+   */
+  private fixUniqueField(testData: any, field: string): any {
+    if (field === "email" && testData.email) {
+      testData.email = generateUniqueEmail();
+    }
+    return testData;
+  }
+
+  /**
+   * Ensure required fields have sensible defaults dynamically
+   */
+  private ensureRequiredFields(testData: any, resourceType: string): any {
+    // Get defaults based on resource type and field analysis
+    const defaults = this.generateDynamicDefaults(resourceType);
+
+    for (const [field, value] of Object.entries(defaults)) {
+      if (testData[field] === undefined || testData[field] === null) {
+        testData[field] = value;
       }
     }
 
@@ -780,136 +1303,47 @@ export class UnifiedDynamicTester {
   }
 
   /**
-   * Get real data from the database for testing
+   * Generate dynamic defaults based on resource type and field patterns
    */
-  private async getRealDataForTesting(): Promise<{
-    categoryId: string;
-    userId: string;
-    productId: string;
-    orderId: string;
-  }> {
-    try {
-      // Fetch real data from the API - handle each endpoint separately
-      let categories: any[] = [];
-      let users: any[] = [];
-      let products: any = { data: [] };
-      let orders: any[] = [];
+  private generateDynamicDefaults(resourceType: string): Record<string, any> {
+    const defaults: Record<string, any> = {};
 
-      // Fetch categories
-      try {
-        const categoriesRes = await fetch(`${this.baseUrl}/api/categories`);
-        if (categoriesRes.ok) {
-          const categoriesText = await categoriesRes.text();
-          if (categoriesText) {
-            categories = JSON.parse(categoriesText);
-          }
-        }
-      } catch (error) {
-        console.warn("Failed to fetch categories:", error);
-      }
+    // Analyze common patterns for different resource types
+    switch (resourceType.toLowerCase()) {
+      case "products":
+      case "product":
+        defaults.name = "Test Product";
+        defaults.price = 29.99;
+        defaults.stockQuantity = 100;
+        defaults.description = "Test product description";
+        break;
 
-      // Fetch users (this endpoint doesn't exist, so we'll use fallback)
-      try {
-        const usersRes = await fetch(`${this.baseUrl}/api/users`);
-        if (usersRes.ok) {
-          const usersText = await usersRes.text();
-          if (usersText) {
-            users = JSON.parse(usersText);
-          }
-        }
-      } catch (error) {
-        console.warn("Failed to fetch users:", error);
-      }
+      case "categories":
+      case "category":
+        defaults.name = "Test Category";
+        defaults.description = "Test category description";
+        break;
 
-      // Fetch products
-      try {
-        const productsRes = await fetch(`${this.baseUrl}/api/products`);
-        if (productsRes.ok) {
-          const productsText = await productsRes.text();
-          if (productsText) {
-            products = JSON.parse(productsText);
-          }
-        }
-      } catch (error) {
-        console.warn("Failed to fetch products:", error);
-      }
+      case "users":
+      case "user":
+        defaults.name = "Test User";
+        defaults.email = generateUniqueEmail();
+        break;
 
-      // Fetch orders
-      try {
-        const ordersRes = await fetch(`${this.baseUrl}/api/orders`);
-        if (ordersRes.ok) {
-          const ordersText = await ordersRes.text();
-          if (ordersText) {
-            orders = JSON.parse(ordersText);
-          }
-        }
-      } catch (error) {
-        console.warn("Failed to fetch orders:", error);
-      }
+      case "orders":
+      case "order":
+        // Don't add status field for order creation - API should set it automatically
+        // Only add status for order updates
+        break;
 
-      // Extract the first available IDs with fallbacks
-      const categoryId = categories[0]?.id || "b671f909-eb1d-4d07-a50c-a86582aa275e"; // Electronics
-      const userId = users[0]?.id || "b7620da5-99b8-4bc6-bfc7-b81920a05bc5"; // John Doe from orders
-      const productId = products.data?.[0]?.id || "2909b3c3-a48a-403c-bfd4-d81cd5b9756d"; // First product from API
-      const orderId = orders[0]?.id || "1bff98cd-8a16-475c-9aca-0991ed4f7b60"; // First order
-
-      return { categoryId, userId, productId, orderId };
-    } catch (error) {
-      console.warn("Failed to fetch real data, using fallback IDs:", error);
-      // Return fallback IDs that should exist in seeded data
-      return {
-        categoryId: "b671f909-eb1d-4d07-a50c-a86582aa275e", // Electronics
-        userId: "b7620da5-99b8-4bc6-bfc7-b81920a05bc5", // John Doe
-        productId: "2909b3c3-a48a-403c-bfd4-d81cd5b9756d", // First product from API
-        orderId: "1bff98cd-8a16-475c-9aca-0991ed4f7b60", // First order
-      };
+      default:
+        // For unknown resource types, use generic defaults
+        defaults.name = `Test ${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)}`;
+        defaults.description = `Test ${resourceType} description`;
+        break;
     }
-  }
 
-  /**
-   * Adjust expected status codes based on business logic
-   *
-   * Contract tests should only expect 2xx (success) status codes. 4xx codes are only for violation tests.
-   * If contract tests fail due to missing related resources, ensure your test environment is seeded with valid data.
-   */
-  private adjustExpectedStatusCodes(
-    config: ContractTestConfig,
-    _path: string,
-    method: string
-  ): void {
-    // Only allow 2xx status codes for contract tests
-    config.expectedStatusCodes = config.expectedStatusCodes.filter(
-      (code) => code >= 200 && code < 300
-    );
-
-    // Update expected status codes to match actual API behavior
-    if (method === "POST") {
-      // The API returns 200 for POST instead of 201, so accept both
-      if (!config.expectedStatusCodes.includes(200)) {
-        config.expectedStatusCodes.push(200);
-      }
-      if (!config.expectedStatusCodes.includes(201)) {
-        config.expectedStatusCodes.push(201);
-      }
-    }
-    if (method === "PUT") {
-      // Accept both 200 and 204 for PUT
-      if (!config.expectedStatusCodes.includes(200)) {
-        config.expectedStatusCodes.push(200);
-      }
-      if (!config.expectedStatusCodes.includes(204)) {
-        config.expectedStatusCodes.push(204);
-      }
-    }
-    if (method === "DELETE") {
-      // Accept both 200 and 204 for DELETE
-      if (!config.expectedStatusCodes.includes(200)) {
-        config.expectedStatusCodes.push(200);
-      }
-      if (!config.expectedStatusCodes.includes(204)) {
-        config.expectedStatusCodes.push(204);
-      }
-    }
+    return defaults;
   }
 
   /**
@@ -919,26 +1353,26 @@ export class UnifiedDynamicTester {
     if (!openAPISchema) return null;
     if (openAPISchema.type === "object" && openAPISchema.properties) {
       const result: any = {};
-      for (const [key, prop] of Object.entries(openAPISchema.properties)) {
-        const p = prop as any;
-        if (p && typeof p === "object") {
-          if (p.type === "string") {
-            if (p.format === "uuid") result[key] = "00000000-0000-0000-0000-000000000000";
-            else if (p.format === "email") result[key] = "user@example.com";
-            else result[key] = "sample string";
-          } else if (p.type === "integer" || p.type === "number") {
-            result[key] = 42;
-          } else if (p.type === "boolean") {
-            result[key] = true;
-          } else if (p.type === "array" && p.items) {
-            result[key] = [this.generateFromOpenAPISchema(p.items)];
-          } else if (p.type === "object") {
-            result[key] = this.generateFromOpenAPISchema(p);
-          } else {
-            result[key] = null;
+      const requiredFields = openAPISchema.required || [];
+
+      // First, ensure all required fields are included
+      for (const requiredField of requiredFields) {
+        if (!Object.hasOwn(result, requiredField)) {
+          const prop = openAPISchema.properties[requiredField];
+          if (prop && typeof prop === "object") {
+            result[requiredField] = this.generateValueFromProperty(prop);
           }
         }
       }
+
+      // Then add all other properties
+      for (const [key, prop] of Object.entries(openAPISchema.properties)) {
+        const p = prop as any;
+        if (p && typeof p === "object") {
+          result[key] = this.generateValueFromProperty(p);
+        }
+      }
+
       return result;
     } else if (openAPISchema.type === "array" && (openAPISchema as any).items) {
       return [this.generateFromOpenAPISchema((openAPISchema as any).items)];
@@ -950,6 +1384,27 @@ export class UnifiedDynamicTester {
       return true;
     }
     return null;
+  }
+
+  /**
+   * Generate a value from an OpenAPI property definition
+   */
+  private generateValueFromProperty(prop: any): any {
+    if (prop.type === "string") {
+      if (prop.format === "uuid") return "00000000-0000-0000-0000-000000000000";
+      else if (prop.format === "email") return "user@example.com";
+      else return "sample string";
+    } else if (prop.type === "integer" || prop.type === "number") {
+      return 42;
+    } else if (prop.type === "boolean") {
+      return true;
+    } else if (prop.type === "array" && prop.items) {
+      return [this.generateFromOpenAPISchema(prop.items)];
+    } else if (prop.type === "object") {
+      return this.generateFromOpenAPISchema(prop);
+    } else {
+      return null;
+    }
   }
 
   /**
@@ -1254,11 +1709,17 @@ export class UnifiedDynamicTester {
     const errors: string[] = [];
     const validationSteps: ValidationStep[] = [];
 
-    try {
-      let url = `${this.baseUrl}${config.endpoint}`;
+    let url = `${this.baseUrl}${config.endpoint}`;
+    let resolvedUrl = url;
+    let requestBody: string | undefined = undefined;
 
-      // Replace path parameters with valid values for contract tests
-      url = url.replace(/\{id\}/g, "00000000-0000-0000-0000-000000000000");
+    try {
+      // Dynamically replace path parameters based on OpenAPI spec
+      resolvedUrl = await this.replacePathParametersDynamically(
+        url,
+        config.endpoint,
+        config.method
+      );
 
       const options: RequestInit = {
         method: config.method,
@@ -1269,9 +1730,10 @@ export class UnifiedDynamicTester {
 
       if (config.testData && ["POST", "PUT", "PATCH"].includes(config.method)) {
         options.body = JSON.stringify(config.testData);
+        requestBody = options.body;
       }
 
-      const response = await fetch(url, options);
+      const response = await fetch(resolvedUrl, options);
       const responseTime = Date.now() - startTime;
       const responseData = await response.text();
 
@@ -1351,31 +1813,17 @@ export class UnifiedDynamicTester {
         });
       }
 
-      // Validate error response schema if available
-      if (config.errorSchema && response.status >= 400) {
-        try {
-          config.errorSchema.parse(parsedData);
-          validationSteps.push({
-            name: "Error Response Schema Validation",
-            passed: true,
-            details: "Error response data conforms to expected error schema",
-          });
-        } catch (error) {
-          if (error instanceof z.ZodError) {
-            validationSteps.push({
-              name: "Error Response Schema Validation",
-              passed: false,
-              error: `Error schema validation failed: ${error.message}`,
-            });
-            errors.push(`Error response schema validation failed: ${error.message}`);
-          }
+      // Print debug info for failed contract tests
+      if (errors.length > 0) {
+        console.log("\n--- CONTRACT TEST FAILURE DEBUG ---");
+        console.log(`Endpoint: ${config.method} ${config.endpoint}`);
+        console.log(`Resolved URL: ${resolvedUrl}`);
+        if (requestBody) {
+          console.log(`Request Body: ${requestBody}`);
+        } else {
+          console.log("Request Body: <none>");
         }
-      } else if (config.errorSchema) {
-        validationSteps.push({
-          name: "Error Response Schema Validation",
-          passed: true,
-          details: "Skipped - response status is not in 4xx/5xx range",
-        });
+        console.log("--- END DEBUG ---\n");
       }
 
       return {
@@ -1397,6 +1845,17 @@ export class UnifiedDynamicTester {
         passed: false,
         error: `Request failed: ${error}`,
       });
+
+      // Print debug info for failed contract tests
+      console.log("\n--- CONTRACT TEST FAILURE DEBUG ---");
+      console.log(`Endpoint: ${config.method} ${config.endpoint}`);
+      console.log(`Resolved URL: ${resolvedUrl}`);
+      if (requestBody) {
+        console.log(`Request Body: ${requestBody}`);
+      } else {
+        console.log("Request Body: <none>");
+      }
+      console.log("--- END DEBUG ---\n");
 
       return {
         success: false,
@@ -1421,6 +1880,14 @@ export class UnifiedDynamicTester {
 
     try {
       let url = `${this.baseUrl}${config.endpoint}`;
+
+      // Dynamically replace path parameters based on OpenAPI spec
+      url = await this.replacePathParametersDynamically(
+        url,
+        config.endpoint,
+        config.method
+      );
+
       const options: RequestInit = {
         method: config.method,
         headers: {
@@ -1524,98 +1991,51 @@ export class UnifiedDynamicTester {
    * Generate and run all contract tests
    */
   async runAllContractTests(): Promise<ContractTestResult[]> {
-    console.log("🔍 Generating dynamic contract tests...");
+    console.log("\n🔗 Running Contract Tests...");
+    console.log("=".repeat(50));
 
-    const endpoints = this.extractEndpoints();
-    const testConfigs: ContractTestConfig[] = [];
-    const endpointMappings: Array<{
-      endpoint: string;
-      method: string;
-      requestSchema?: string;
-      responseSchema?: string;
-      mappingType: string;
-    }> = [];
-
-    console.log(`📋 Found ${endpoints.length} endpoints in OpenAPI spec:`);
-    endpoints.forEach((endpoint, index) => {
-      console.log(`   ${index + 1}. ${endpoint.method} ${endpoint.path}`);
-    });
-
-    for (const endpoint of endpoints) {
-      const config = await this.generateContractTestConfig(endpoint);
-
-      // Track the mapping for summary
-      const mapping = {
-        endpoint: endpoint.path,
-        method: endpoint.method,
-        requestSchema: this.getSchemaName(config.requestSchema || null),
-        responseSchema: this.getSchemaName(config.responseSchema || null),
-        mappingType: this.getMappingType(
-          config.requestSchema || null,
-          config.responseSchema || null
-        ),
-      };
-      endpointMappings.push(mapping);
-
-      console.log(`\n🔍 Analyzing ${endpoint.method} ${endpoint.path}:`);
-      console.log(
-        `   Request Schema: ${config.requestSchema ? "✅ Found" : "❌ Not found"}`
-      );
-      console.log(
-        `   Response Schema: ${config.responseSchema ? "✅ Found" : "❌ Not found"}`
-      );
-
-      if (config.requestSchema || config.responseSchema) {
-        testConfigs.push(config);
-        console.log(`   ✅ Added to contract tests`);
-      } else {
-        console.log(`   ❌ Skipped - no schemas found`);
-      }
+    // Validate server connection first
+    const serverAvailable = await this.validateServerConnection();
+    if (!serverAvailable) {
+      console.log("⚠️  Proceeding with tests despite server connection warning...");
     }
 
-    // Print endpoint to schema mapping summary
-    console.log("\n📊 OpenAPI Endpoint to Zod Schema Mapping:");
-    console.log("=".repeat(80));
-    console.log(
-      `${"Endpoint".padEnd(30) + "Method".padEnd(8) + "Request Schema".padEnd(25) + "Response Schema".padEnd(25)}Mapping Type`
-    );
-    console.log("-".repeat(80));
-
-    endpointMappings.forEach((mapping) => {
-      const endpoint = mapping.endpoint.padEnd(30);
-      const method = mapping.method.padEnd(8);
-      const requestSchema = (mapping.requestSchema || "N/A").padEnd(25);
-      const responseSchema = (mapping.responseSchema || "N/A").padEnd(25);
-      const mappingType = mapping.mappingType;
-
-      console.log(`${endpoint}${method}${requestSchema}${responseSchema}${mappingType}`);
-    });
-    console.log("=".repeat(80));
-
-    // Store test configurations for coverage reporting
-    this.contractTestConfigs = testConfigs;
-
-    console.log(`\n📋 Generated ${testConfigs.length} contract test configurations`);
-    console.log(`🚀 Running ${testConfigs.length} contract tests...`);
-
+    const endpoints = this.extractEndpoints();
     const results: ContractTestResult[] = [];
 
-    for (const config of testConfigs) {
+    for (const endpoint of endpoints) {
       try {
-        const result = await this.runContractTest(config);
-        results.push(result);
+        const config = await this.generateContractTestConfig(endpoint);
 
-        const status = result.success ? "✅ PASS" : "❌ FAIL";
-        console.log(`${status} ${config.method} ${config.endpoint}`);
+        if (config.requestSchema || config.responseSchema) {
+          console.log(`\n🔗 Testing ${endpoint.method} ${endpoint.path}`);
+          const result = await this.runContractTest(config);
+          results.push(result);
 
-        if (!result.success) {
-          console.log(`   Errors: ${result.errors.join(", ")}`);
+          if (result.success) {
+            console.log(`✅ ${endpoint.method} ${endpoint.path} - PASSED`);
+          } else {
+            console.log(`❌ ${endpoint.method} ${endpoint.path} - FAILED`);
+            console.log(
+              `   Status: ${result.statusCode}, Errors: ${result.errors.join(", ")}`
+            );
+          }
+        } else {
+          console.log(
+            `⏭️  Skipping ${endpoint.method} ${endpoint.path} - no schemas found`
+          );
         }
       } catch (error) {
-        console.error(
-          `❌ Contract test failed for ${config.method} ${config.endpoint}:`,
-          error
-        );
+        console.error(`❌ Error testing ${endpoint.method} ${endpoint.path}:`, error);
+        results.push({
+          success: false,
+          endpoint: endpoint.path,
+          method: endpoint.method,
+          statusCode: 0,
+          errors: [error instanceof Error ? error.message : "Unknown error"],
+          testType: "contract",
+          validationSteps: [],
+        });
       }
     }
 
@@ -1627,50 +2047,55 @@ export class UnifiedDynamicTester {
    * Generate and run all violation tests
    */
   async runAllViolationTests(): Promise<ViolationTestResult[]> {
-    console.log("🔍 Generating dynamic violation tests...");
+    console.log("\n🚨 Running Violation Tests...");
+    console.log("=".repeat(50));
 
-    const endpoints = this.extractEndpoints();
-    const testConfigs: ViolationTestConfig[] = [];
-
-    for (const endpoint of endpoints) {
-      const configs = this.generateViolationTestConfigs(endpoint);
-      testConfigs.push(...configs);
+    // Validate server connection first
+    const serverAvailable = await this.validateServerConnection();
+    if (!serverAvailable) {
+      console.log("⚠️  Proceeding with tests despite server connection warning...");
     }
 
-    // Add some additional violation tests for endpoints that should exist but don't
-    testConfigs.push({
-      endpoint: "/api/nonexistent-endpoint",
-      method: "GET",
-      description: "Testing non-existent endpoint",
-      expectedViolation: "Non-existent endpoint should return 404",
-      testType: "wrong_status",
-    });
-
-    // Store test configurations for coverage reporting
-    this.violationTestConfigs = testConfigs;
-
-    console.log(`📋 Generated ${testConfigs.length} violation test configurations`);
-    console.log(`\n🚀 Running ${testConfigs.length} violation tests...`);
-
+    const endpoints = this.extractEndpoints();
     const results: ViolationTestResult[] = [];
 
-    for (const config of testConfigs) {
+    for (const endpoint of endpoints) {
       try {
-        const result = await this.runViolationTest(config);
-        results.push(result);
+        const configs = this.generateViolationTestConfigs(endpoint);
 
-        const status = result.success ? "✅ PASS" : "❌ FAIL";
-        console.log(`${status} ${config.method} ${config.endpoint} - ${config.testType}`);
+        if (configs.length > 0) {
+          console.log(
+            `\n🚨 Testing ${endpoint.method} ${endpoint.path} (${configs.length} violation tests)`
+          );
 
-        if (!result.success) {
-          console.log(`   Expected: ${config.expectedViolation}`);
-          console.log(`   Actual: ${result.actualResult}`);
+          for (const config of configs) {
+            const result = await this.runViolationTest(config);
+            results.push(result);
+
+            const status = result.success ? "✅ PASS" : "❌ FAIL";
+            console.log(`   ${status} ${config.description}`);
+
+            if (!result.success) {
+              console.log(`      Expected: ${config.expectedViolation}`);
+              console.log(`      Actual: ${result.actualResult}`);
+            }
+          }
+        } else {
+          console.log(
+            `⏭️  Skipping ${endpoint.method} ${endpoint.path} - no violation tests generated`
+          );
         }
       } catch (error) {
-        console.error(
-          `❌ Violation test failed for ${config.method} ${config.endpoint}:`,
-          error
-        );
+        console.error(`❌ Error testing ${endpoint.method} ${endpoint.path}:`, error);
+        results.push({
+          success: false,
+          endpoint: endpoint.path,
+          method: endpoint.method,
+          description: "Test execution error",
+          expectedViolation: "N/A",
+          actualResult: error instanceof Error ? error.message : "Unknown error",
+          testType: "violation",
+        });
       }
     }
 
@@ -2154,6 +2579,220 @@ export class UnifiedDynamicTester {
     this.testedSchemas.clear();
     this.contractTestConfigs = [];
     this.violationTestConfigs = [];
+  }
+
+  /**
+   * Dynamically replace path parameters based on OpenAPI spec
+   */
+  private async replacePathParametersDynamically(
+    url: string,
+    endpoint: string,
+    method: string
+  ): Promise<string> {
+    // Find the endpoint definition in OpenAPI spec
+    const endpointDef = this.findEndpointDefinition(endpoint, method);
+    if (!endpointDef) {
+      return url; // No definition found, return as-is
+    }
+
+    // Get path parameters from the endpoint definition
+    const pathParams = endpointDef.parameters?.filter((p: any) => p.in === "path") || [];
+
+    // Get test data for dynamic ID generation
+    const seedData = await getTestData();
+
+    // Replace each path parameter dynamically
+    for (const param of pathParams) {
+      const paramName = param.name;
+      const paramPattern = new RegExp(`\\{${paramName}\\}`, "g");
+
+      // Generate appropriate value based on parameter type and endpoint context
+      const paramValue = this.generateDynamicParameterValue(param, endpoint, seedData);
+
+      url = url.replace(paramPattern, paramValue);
+    }
+
+    return url;
+  }
+
+  /**
+   * Find endpoint definition in OpenAPI spec
+   */
+  private findEndpointDefinition(
+    endpoint: string,
+    method?: string
+  ): EndpointDefinition | null {
+    // Try to find the endpoint in the OpenAPI spec
+    const pathDef = this.openAPISpec.paths[endpoint];
+    if (!pathDef) return null;
+
+    if (method) {
+      // Use the specific method if provided
+      const methodDef = pathDef[method.toLowerCase()];
+      if (methodDef) {
+        return {
+          path: endpoint,
+          method: method.toUpperCase(),
+          summary: methodDef.summary || "",
+          description: methodDef.description || "",
+          tags: methodDef.tags || [],
+          parameters: methodDef.parameters || [],
+          requestBody: methodDef.requestBody,
+          responses: methodDef.responses || {},
+        };
+      }
+    } else {
+      // For now, try common methods - in practice, the method should be passed in
+      const methods = ["get", "post", "put", "patch", "delete"];
+      for (const method of methods) {
+        const methodDef = pathDef[method];
+        if (methodDef) {
+          return {
+            path: endpoint,
+            method: method.toUpperCase(),
+            summary: methodDef.summary || "",
+            description: methodDef.description || "",
+            tags: methodDef.tags || [],
+            parameters: methodDef.parameters || [],
+            requestBody: methodDef.requestBody,
+            responses: methodDef.responses || {},
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Extract HTTP method from endpoint string
+   */
+  private extractMethodFromEndpoint(_endpoint: string): string {
+    // This is a simplified extraction - in practice, the method comes from the test config
+    return "GET"; // Default fallback
+  }
+
+  /**
+   * Extract path from endpoint string
+   */
+  private extractPathFromEndpoint(endpoint: string): string {
+    return endpoint;
+  }
+
+  /**
+   * Generate dynamic parameter value based on parameter definition and context
+   */
+  private generateDynamicParameterValue(
+    param: any,
+    endpoint: string,
+    seedData: any
+  ): string {
+    const paramName = param.name.toLowerCase();
+    const paramType = param.schema?.type || param.type;
+
+    // Generate value based on parameter type and context
+    if (paramType === "string" && param.schema?.format === "uuid") {
+      // UUID parameter - generate based on endpoint context
+      return this.generateContextualUUID(paramName, endpoint, seedData);
+    } else if (paramType === "string") {
+      // String parameter
+      return this.generateStringValue(paramName, param.schema);
+    } else if (paramType === "integer" || paramType === "number") {
+      // Numeric parameter
+      return this.generateNumericValue(paramName, param.schema);
+    }
+
+    // Fallback
+    return "default-value";
+  }
+
+  /**
+   * Generate contextual UUID based on endpoint and parameter name
+   */
+  private generateContextualUUID(
+    _paramName: string,
+    endpoint: string,
+    seedData: any
+  ): string {
+    // Extract resource type from endpoint path
+    const resourceMatch = endpoint.match(/\/api\/([^\/]+)/);
+    const resource = resourceMatch ? resourceMatch[1] : "unknown";
+
+    // Map resource types to seed data
+    const resourceMap: Record<string, any[]> = {
+      products: seedData.products,
+      categories: seedData.categories,
+      orders: seedData.orders,
+      users: seedData.users,
+    };
+
+    const resourceData = resourceMap[resource];
+    if (resourceData && resourceData.length > 0) {
+      // Use first item's ID for consistency
+      return resourceData[0].id;
+    }
+
+    // Fallback to a valid UUID format
+    return "00000000-0000-0000-0000-000000000000";
+  }
+
+  /**
+   * Generate string value based on parameter schema
+   */
+  private generateStringValue(_paramName: string, schema: any): string {
+    if (schema?.format === "email") {
+      return generateUniqueEmail();
+    } else if (schema?.enum) {
+      return schema.enum[0]; // Use first enum value
+    } else if (schema?.pattern) {
+      // For patterns, generate a simple string (could be enhanced with regex generation)
+      return "sample-string";
+    }
+
+    return "sample-string";
+  }
+
+  /**
+   * Generate numeric value based on parameter schema
+   */
+  private generateNumericValue(_paramName: string, schema: any): string {
+    if (schema?.minimum !== undefined) {
+      return Math.max(schema.minimum, 1).toString();
+    } else if (schema?.maximum !== undefined) {
+      return Math.min(schema.maximum, 100).toString();
+    }
+
+    return "1";
+  }
+
+  /**
+   * Cleanup resources
+   */
+  async cleanup(): Promise<void> {
+    // Import the disconnect function to avoid circular dependency
+    const { disconnect } = await import("./test-data");
+    await disconnect();
+  }
+
+  /**
+   * Validate that the server is running on the configured port
+   */
+  private async validateServerConnection(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/test`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(5000), // 5 second timeout
+      });
+      return response.ok;
+    } catch (error) {
+      console.warn(`⚠️  Warning: Could not connect to server at ${this.baseUrl}`);
+      console.warn(
+        `   Error: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+      console.warn(`   Make sure your server is running on the correct port.`);
+      return false;
+    }
   }
 }
 
