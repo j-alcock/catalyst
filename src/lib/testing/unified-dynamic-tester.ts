@@ -237,6 +237,8 @@ export class UnifiedDynamicTester {
           const schemaName = responseSchema.$ref.split("/").pop();
           if (schemaName) {
             this.trackSchemaCoverage(schemaName);
+            // Track nested schemas within this schema
+            this.trackNestedSchemaCoverage(schemaName);
           }
         } else {
           config.responseSchema = this.mapInlineSchemaToZod(
@@ -253,6 +255,8 @@ export class UnifiedDynamicTester {
           const schemaName = errorSchema.$ref.split("/").pop();
           if (schemaName) {
             this.trackSchemaCoverage(schemaName);
+            // Track nested schemas within this schema
+            this.trackNestedSchemaCoverage(schemaName);
           }
         }
       }
@@ -1230,6 +1234,57 @@ export class UnifiedDynamicTester {
    */
   private trackSchemaCoverage(schemaName: string): void {
     this.testedSchemas.add(schemaName);
+  }
+
+  /**
+   * Track nested schema coverage by analyzing schema references within a schema
+   */
+  private trackNestedSchemaCoverage(schemaName: string): void {
+    if (!this.openAPISpec.components?.schemas?.[schemaName]) {
+      return;
+    }
+
+    const schema = this.openAPISpec.components.schemas[schemaName];
+    this.analyzeSchemaForNestedReferences(schema);
+  }
+
+  /**
+   * Recursively analyze a schema for nested schema references
+   */
+  private analyzeSchemaForNestedReferences(schema: any): void {
+    if (!schema || typeof schema !== "object") {
+      return;
+    }
+
+    // Check if this is a direct schema reference
+    if (schema.$ref) {
+      const nestedSchemaName = schema.$ref.split("/").pop();
+      if (nestedSchemaName) {
+        this.trackSchemaCoverage(nestedSchemaName);
+      }
+      return;
+    }
+
+    // Check object properties
+    if (schema.properties) {
+      for (const property of Object.values(schema.properties)) {
+        this.analyzeSchemaForNestedReferences(property);
+      }
+    }
+
+    // Check array items
+    if (schema.items) {
+      this.analyzeSchemaForNestedReferences(schema.items);
+    }
+
+    // Check allOf, anyOf, oneOf
+    ["allOf", "anyOf", "oneOf"].forEach((key) => {
+      if (schema[key] && Array.isArray(schema[key])) {
+        schema[key].forEach((item: any) => {
+          this.analyzeSchemaForNestedReferences(item);
+        });
+      }
+    });
   }
 
   /**
