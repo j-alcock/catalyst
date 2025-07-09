@@ -18,6 +18,7 @@
     "seed": "tsx prisma/seed.ts",
     "generate:openapi": "prisma generate",
     "test:contract": "tsx src/lib/testing/run-heyapi-tests.ts",
+    "test:contract:algorithmic": "tsx src/lib/testing/run-algorithmic-tests.ts",
     "test:violations": "tsx src/lib/testing/run-violation-tests.ts",
     "test:heyapi": "tsx src/lib/testing/run-heyapi-tests.ts"
   },

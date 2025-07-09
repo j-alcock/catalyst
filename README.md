@@ -69,25 +69,46 @@ This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-opti
 
 ## Contract Testing
 
-This project includes a contract test suite that validates your API implementation against the OpenAPI specification using the HeyAPI-generated client and types.
+This project includes comprehensive contract testing using HeyAPI and Zod with both manual and algorithmic approaches:
 
 ### Running Contract Tests
 
-To run all contract tests:
-
 ```bash
+# Run comprehensive manual contract tests
 npm run test:contract
+
+# Run algorithmic contract tests (OpenAPI-driven)
+npm run test:contract:algorithmic
+
+# Run contract violation tests (should fail)
+npm run test:violations
 ```
 
-This will execute all contract tests using the HeyAPI-generated TypeScript client and print a summary of results. The process will exit with a nonzero code if any contract is broken.
+### Contract Testing Approaches
 
-You can also run the test runner directly with:
+#### 1. Manual Contract Tests (`test:contract`)
+- **Comprehensive field validation**: Tests every characteristic of all fields
+- **Type safety**: Uses TypeScript and Zod for runtime validation
+- **Error scenarios**: Tests 400, 404, 409, and 500 error responses
+- **Relationship integrity**: Validates foreign key relationships and nested objects
+- **Data consistency**: Ensures data matches between create and retrieve operations
+- **Business rules**: Validates business logic constraints
 
-```bash
-npx tsx src/lib/testing/run-heyapi-tests.ts
-```
+#### 2. Algorithmic Contract Tests (`test:contract:algorithmic`)
+- **OpenAPI-driven**: Automatically generates tests from the OpenAPI specification
+- **Schema-based validation**: Uses Zod validators derived from the OpenAPI spec
+- **Automatic test generation**: No manual test maintenance required
+- **Complete coverage**: Tests all endpoints defined in the OpenAPI spec
+- **Edge case testing**: Automatically tests boundary conditions and edge cases
+- **Error response validation**: Validates error responses against OpenAPI error schemas
 
-The contract tests cover all major endpoints (users, products, categories, orders) and both success and error scenarios.
+### Algorithmic Testing Benefits
+
+- **Single source of truth**: The OpenAPI spec is the contract
+- **Automatic updates**: Tests update automatically as the spec changes
+- **Complete coverage**: Ensures no endpoints are missed
+- **Consistent validation**: All responses validated against the same schemas
+- **Reduced maintenance**: No need to manually update tests when API changes
 
 ### HeyAPI Contract Tests
 
