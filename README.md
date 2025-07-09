@@ -79,12 +79,12 @@ To run all contract tests:
 npm run test:contract
 ```
 
-This will execute all contract tests in `src/lib/testing/run-contract-tests.ts` and print a summary of results. The process will exit with a nonzero code if any contract is broken.
+This will execute all contract tests using the HeyAPI-generated TypeScript client and print a summary of results. The process will exit with a nonzero code if any contract is broken.
 
 You can also run the test runner directly with:
 
 ```bash
-npx tsx src/lib/testing/run-contract-tests.ts
+npx tsx src/lib/testing/run-heyapi-tests.ts
 ```
 
 The contract tests cover all major endpoints (users, products, categories, orders) and both success and error scenarios.

@@ -1,4 +1,3 @@
-import { NextApiResponse } from "next";
 import { z } from "zod";
 
 export interface ContractTestResult {

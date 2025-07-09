@@ -17,7 +17,7 @@
     "migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",
     "generate:openapi": "prisma generate",
-    "test:contract": "tsx src/lib/testing/run-contract-tests.ts",
+    "test:contract": "tsx src/lib/testing/run-heyapi-tests.ts",
     "test:violations": "tsx src/lib/testing/run-violation-tests.ts",
     "test:heyapi": "tsx src/lib/testing/run-heyapi-tests.ts",
     "test": "jest"
