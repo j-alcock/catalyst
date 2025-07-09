@@ -204,10 +204,90 @@ console.log('Discovered schemas:', Object.keys(this.availableSchemas));
 console.log('Generated test config:', config);
 ```
 
+## Coverage Reporting
+
+The unified testing system provides comprehensive coverage analysis to help you understand which parts of your API are being tested.
+
+### Coverage Statistics
+
+The system tracks:
+- **Endpoint Coverage**: Which API endpoints are tested vs untested
+- **Schema Coverage**: Which Zod schemas are validated vs untested
+- **Test Configuration Summary**: Number of contract and violation tests generated
+
+### Coverage Report Example
+
+```
+📊 Coverage Report:
+==================================================
+
+🔗 Endpoint Coverage: 13/13 (100.0%)
+
+✅ Tested Endpoints:
+   - GET /api/products
+   - POST /api/products
+   - GET /api/products/{id}
+   - PUT /api/products/{id}
+   - GET /api/categories
+   - POST /api/categories
+   - GET /api/categories/{id}
+   - GET /api/orders
+   - POST /api/orders
+   - GET /api/orders/{id}
+   - PUT /api/orders/{id}/status
+   - POST /api/users
+   - GET /api/users/{id}
+
+📋 Schema Coverage: 5/7 (71.4%)
+
+✅ Tested Schemas:
+   - Error
+   - Product
+   - Category
+   - Order
+   - User
+
+❌ Untested Schemas:
+   - OrderItem
+   - OrderStatus
+
+🧪 Test Configuration Summary:
+   Contract Tests: 4
+   Violation Tests: 28
+   Total Tests: 32
+```
+
+### Programmatic Access
+
+You can access coverage data programmatically:
+
+```typescript
+import { unifiedTester } from './unified-dynamic-tester';
+
+// Run tests first
+await unifiedTester.runAllTests();
+
+// Get coverage statistics
+const coverage = unifiedTester.getCoverageStats();
+console.log(`Endpoint coverage: ${coverage.endpoints.coverage.toFixed(1)}%`);
+console.log(`Schema coverage: ${coverage.schemas.coverage.toFixed(1)}%`);
+
+// Get detailed coverage information
+const detailedCoverage = unifiedTester.getDetailedCoverage();
+console.log('Tested endpoints:', detailedCoverage.endpoints.testedList);
+console.log('Untested schemas:', detailedCoverage.schemas.untestedList);
+```
+
+### Coverage Benefits
+
+- **Identify gaps**: See which endpoints and schemas need more testing
+- **Track progress**: Monitor coverage improvements over time
+- **Quality assurance**: Ensure comprehensive API testing
+- **Documentation**: Coverage reports serve as API documentation
+
 ## Future Enhancements
 
 - **Custom test data generators**: Allow custom test data for specific fields
 - **Performance benchmarks**: Track and report performance regressions
-- **Coverage reporting**: Show which endpoints/schemas are tested
 - **Parallel execution**: Run tests in parallel for faster execution
 - **Custom validators**: Allow custom validation rules beyond Zod schemas 

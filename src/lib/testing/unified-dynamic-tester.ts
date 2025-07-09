@@ -92,6 +92,12 @@ export class UnifiedDynamicTester {
   private violationResults: ViolationTestResult[] = [];
   private baseUrl: string;
 
+  // Coverage tracking
+  private testedEndpoints: Set<string> = new Set();
+  private testedSchemas: Set<string> = new Set();
+  private contractTestConfigs: ContractTestConfig[] = [];
+  private violationTestConfigs: ViolationTestConfig[] = [];
+
   constructor(baseUrl: string = "http://localhost:3000") {
     this.baseUrl = baseUrl;
     this.openAPISpec = this.loadOpenAPISpec();
@@ -181,6 +187,9 @@ export class UnifiedDynamicTester {
       errorStatusCodes: [],
     };
 
+    // Track endpoint coverage
+    this.trackEndpointCoverage(endpoint.path, endpoint.method);
+
     // Determine expected status codes
     for (const [statusCode, _response] of Object.entries(endpoint.responses)) {
       const code = parseInt(statusCode);
@@ -202,6 +211,11 @@ export class UnifiedDynamicTester {
       const requestSchema = endpoint.requestBody.content["application/json"].schema;
       if (requestSchema.$ref) {
         config.requestSchema = this.mapSchemaReference(requestSchema.$ref);
+        // Track schema coverage
+        const schemaName = requestSchema.$ref.split("/").pop();
+        if (schemaName) {
+          this.trackSchemaCoverage(schemaName);
+        }
       } else {
         // Handle inline schemas by mapping to appropriate Zod schema
         config.requestSchema = this.mapInlineSchemaToZod(
@@ -219,6 +233,11 @@ export class UnifiedDynamicTester {
         const responseSchema = response.content?.["application/json"]?.schema;
         if (responseSchema?.$ref) {
           config.responseSchema = this.mapSchemaReference(responseSchema.$ref);
+          // Track schema coverage
+          const schemaName = responseSchema.$ref.split("/").pop();
+          if (schemaName) {
+            this.trackSchemaCoverage(schemaName);
+          }
         } else {
           config.responseSchema = this.mapInlineSchemaToZod(
             responseSchema,
@@ -230,6 +249,11 @@ export class UnifiedDynamicTester {
         const errorSchema = response.content?.["application/json"]?.schema;
         if (errorSchema?.$ref) {
           config.errorSchema = this.mapSchemaReference(errorSchema.$ref);
+          // Track schema coverage
+          const schemaName = errorSchema.$ref.split("/").pop();
+          if (schemaName) {
+            this.trackSchemaCoverage(schemaName);
+          }
         }
       }
     }
@@ -253,6 +277,9 @@ export class UnifiedDynamicTester {
     endpoint: EndpointDefinition
   ): ViolationTestConfig[] {
     const tests: ViolationTestConfig[] = [];
+
+    // Track endpoint coverage
+    this.trackEndpointCoverage(endpoint.path, endpoint.method);
 
     // Dynamically analyze the endpoint definition to determine what tests to generate
     const hasRequestBody = endpoint.requestBody?.content?.["application/json"]?.schema;
@@ -932,6 +959,9 @@ export class UnifiedDynamicTester {
       }
     }
 
+    // Store test configurations for coverage reporting
+    this.contractTestConfigs = testConfigs;
+
     console.log(`📋 Generated ${testConfigs.length} contract test configurations`);
     console.log(`\n🚀 Running ${testConfigs.length} contract tests...`);
 
@@ -983,6 +1013,9 @@ export class UnifiedDynamicTester {
       testType: "wrong_status",
     });
 
+    // Store test configurations for coverage reporting
+    this.violationTestConfigs = testConfigs;
+
     console.log(`📋 Generated ${testConfigs.length} violation test configurations`);
     console.log(`\n🚀 Running ${testConfigs.length} violation tests...`);
 
@@ -1021,6 +1054,9 @@ export class UnifiedDynamicTester {
 
     const contractResults = await this.runAllContractTests();
     const violationResults = await this.runAllViolationTests();
+
+    // Print coverage report
+    this.printCoverageReport();
 
     return [...contractResults, ...violationResults];
   }
@@ -1170,6 +1206,203 @@ export class UnifiedDynamicTester {
       console.log("\n✅ All tests passed!");
       console.log("Your API validation is working correctly.");
     }
+
+    // Print coverage summary
+    const coverage = this.getCoverageStats();
+    console.log(`\n📊 Coverage Summary:`);
+    console.log(
+      `   Endpoints: ${coverage.endpoints.tested}/${coverage.endpoints.total} (${coverage.endpoints.coverage.toFixed(1)}%)`
+    );
+    console.log(
+      `   Schemas: ${coverage.schemas.tested}/${coverage.schemas.total} (${coverage.schemas.coverage.toFixed(1)}%)`
+    );
+  }
+
+  /**
+   * Track endpoint coverage
+   */
+  private trackEndpointCoverage(endpoint: string, method: string): void {
+    this.testedEndpoints.add(`${method} ${endpoint}`);
+  }
+
+  /**
+   * Track schema coverage
+   */
+  private trackSchemaCoverage(schemaName: string): void {
+    this.testedSchemas.add(schemaName);
+  }
+
+  /**
+   * Get all available endpoints from OpenAPI spec
+   */
+  private getAllAvailableEndpoints(): string[] {
+    const endpoints: string[] = [];
+    for (const [path, methods] of Object.entries(this.openAPISpec.paths)) {
+      for (const [method, definition] of Object.entries(methods)) {
+        if (typeof definition === "object" && definition !== null) {
+          endpoints.push(`${method.toUpperCase()} ${path}`);
+        }
+      }
+    }
+    return endpoints;
+  }
+
+  /**
+   * Get all available schemas from OpenAPI spec
+   */
+  private getAllAvailableSchemas(): string[] {
+    const schemas: string[] = [];
+    if (this.openAPISpec.components?.schemas) {
+      for (const schemaName of Object.keys(this.openAPISpec.components.schemas)) {
+        schemas.push(schemaName);
+      }
+    }
+    return schemas;
+  }
+
+  /**
+   * Get coverage statistics
+   */
+  getCoverageStats(): {
+    endpoints: {
+      total: number;
+      tested: number;
+      coverage: number;
+      testedList: string[];
+      untestedList: string[];
+    };
+    schemas: {
+      total: number;
+      tested: number;
+      coverage: number;
+      testedList: string[];
+      untestedList: string[];
+    };
+  } {
+    const allEndpoints = this.getAllAvailableEndpoints();
+    const allSchemas = this.getAllAvailableSchemas();
+
+    const testedEndpoints = Array.from(this.testedEndpoints);
+    const untestedEndpoints = allEndpoints.filter((ep) => !this.testedEndpoints.has(ep));
+
+    const testedSchemas = Array.from(this.testedSchemas);
+    const untestedSchemas = allSchemas.filter(
+      (schema) => !this.testedSchemas.has(schema)
+    );
+
+    return {
+      endpoints: {
+        total: allEndpoints.length,
+        tested: testedEndpoints.length,
+        coverage:
+          allEndpoints.length > 0
+            ? (testedEndpoints.length / allEndpoints.length) * 100
+            : 0,
+        testedList: testedEndpoints,
+        untestedList: untestedEndpoints,
+      },
+      schemas: {
+        total: allSchemas.length,
+        tested: testedSchemas.length,
+        coverage:
+          allSchemas.length > 0 ? (testedSchemas.length / allSchemas.length) * 100 : 0,
+        testedList: testedSchemas,
+        untestedList: untestedSchemas,
+      },
+    };
+  }
+
+  /**
+   * Print coverage report
+   */
+  printCoverageReport(): void {
+    const coverage = this.getCoverageStats();
+
+    console.log("\n📊 Coverage Report:");
+    console.log("=".repeat(50));
+
+    // Endpoint coverage
+    console.log(
+      `\n🔗 Endpoint Coverage: ${coverage.endpoints.tested}/${coverage.endpoints.total} (${coverage.endpoints.coverage.toFixed(1)}%)`
+    );
+
+    if (coverage.endpoints.testedList.length > 0) {
+      console.log("\n✅ Tested Endpoints:");
+      coverage.endpoints.testedList.forEach((endpoint) => {
+        console.log(`   - ${endpoint}`);
+      });
+    }
+
+    if (coverage.endpoints.untestedList.length > 0) {
+      console.log("\n❌ Untested Endpoints:");
+      coverage.endpoints.untestedList.forEach((endpoint) => {
+        console.log(`   - ${endpoint}`);
+      });
+    }
+
+    // Schema coverage
+    console.log(
+      `\n📋 Schema Coverage: ${coverage.schemas.tested}/${coverage.schemas.total} (${coverage.schemas.coverage.toFixed(1)}%)`
+    );
+
+    if (coverage.schemas.testedList.length > 0) {
+      console.log("\n✅ Tested Schemas:");
+      coverage.schemas.testedList.forEach((schema) => {
+        console.log(`   - ${schema}`);
+      });
+    }
+
+    if (coverage.schemas.untestedList.length > 0) {
+      console.log("\n❌ Untested Schemas:");
+      coverage.schemas.untestedList.forEach((schema) => {
+        console.log(`   - ${schema}`);
+      });
+    }
+
+    // Test configuration summary
+    console.log(`\n🧪 Test Configuration Summary:`);
+    console.log(`   Contract Tests: ${this.contractTestConfigs.length}`);
+    console.log(`   Violation Tests: ${this.violationTestConfigs.length}`);
+    console.log(
+      `   Total Tests: ${this.contractTestConfigs.length + this.violationTestConfigs.length}`
+    );
+  }
+
+  /**
+   * Get detailed coverage information for programmatic access
+   */
+  getDetailedCoverage(): {
+    endpoints: {
+      total: number;
+      tested: number;
+      coverage: number;
+      testedList: string[];
+      untestedList: string[];
+    };
+    schemas: {
+      total: number;
+      tested: number;
+      coverage: number;
+      testedList: string[];
+      untestedList: string[];
+    };
+    testConfigs: {
+      contract: ContractTestConfig[];
+      violation: ViolationTestConfig[];
+      total: number;
+    };
+  } {
+    const coverage = this.getCoverageStats();
+
+    return {
+      endpoints: coverage.endpoints,
+      schemas: coverage.schemas,
+      testConfigs: {
+        contract: this.contractTestConfigs,
+        violation: this.violationTestConfigs,
+        total: this.contractTestConfigs.length + this.violationTestConfigs.length,
+      },
+    };
   }
 
   /**
@@ -1178,6 +1411,10 @@ export class UnifiedDynamicTester {
   clearResults(): void {
     this.contractResults = [];
     this.violationResults = [];
+    this.testedEndpoints.clear();
+    this.testedSchemas.clear();
+    this.contractTestConfigs = [];
+    this.violationTestConfigs = [];
   }
 }
 
