@@ -7,7 +7,7 @@ const schema = z.object({
   host: z.string().url(),
 
   // Auth
-  redirectPath: z.string(),
+  redirectPath: z.string().default("/dashboard"),
 
   // Tracking
   gaId: z.string().optional(),
