@@ -24,7 +24,11 @@
     "test:contract-auto": "tsx src/lib/testing/run-auto-contract-tests.ts",
     "test:contract-dynamic": "tsx src/lib/testing/run-dynamic-contract-tests.ts",
     "test:contract-demo": "tsx src/lib/testing/dynamic-demo.ts",
-    "test:violations-dynamic": "tsx src/lib/testing/run-dynamic-violation-tests.ts"
+    "test:violations-dynamic": "tsx src/lib/testing/run-dynamic-violation-tests.ts",
+    "test:unified": "tsx src/lib/testing/run-unified-tests.ts",
+    "test:unified-contract": "tsx src/lib/testing/run-specific-tests.ts contract",
+    "test:unified-violation": "tsx src/lib/testing/run-specific-tests.ts violation",
+    "test:unified-all": "tsx src/lib/testing/run-specific-tests.ts both"
   },
   "lint-staged": {
     "*.{ts,tsx}": ["biome check --write --no-errors-on-unmatched ./src"]
