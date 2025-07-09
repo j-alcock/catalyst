@@ -21,6 +21,7 @@ datasource db {
 model User {
   @@map("users")
 
+  /// Auto-generated UUID primary key
   id              String   @id @default(uuid())
   name            String
   email           String   @unique
@@ -28,13 +29,16 @@ model User {
   picture         String
   notifications   Notification[]
   orders          Order[]
+  /// Auto-generated creation timestamp
   createdAt       DateTime @default(now()) @map("created_at")
+  /// Auto-generated update timestamp
   updatedAt       DateTime @updatedAt @map("updated_at")
 }
 
 model Notification {
   @@map("notifications")
 
+  /// Auto-generated UUID primary key
   id                String   @id @default(uuid())
   type              String
   title             String
@@ -44,24 +48,30 @@ model Notification {
   archived          Boolean  @default(false)
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId            String   @map("user_id")
+  /// Auto-generated creation timestamp
   createdAt         DateTime @default(now()) @map("created_at")
+  /// Auto-generated update timestamp
   updatedAt         DateTime @updatedAt @map("updated_at")
 }
 
 model Category {
   @@map("categories")
 
+  /// Auto-generated UUID primary key
   id          String    @id @default(uuid())
   name        String
   description String?
   products    Product[]
+  /// Auto-generated creation timestamp
   createdAt   DateTime  @default(now()) @map("created_at")
+  /// Auto-generated update timestamp
   updatedAt   DateTime  @updatedAt @map("updated_at")
 }
 
 model Product {
   @@map("products")
 
+  /// Auto-generated UUID primary key
   id             String      @id @default(uuid())
   name           String
   description    String?
@@ -70,34 +80,44 @@ model Product {
   category       Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   categoryId     String      @map("category_id")
   orderItems     OrderItem[]
+  /// Auto-generated creation timestamp
   createdAt      DateTime    @default(now()) @map("created_at")
+  /// Auto-generated update timestamp
   updatedAt      DateTime    @updatedAt @map("updated_at")
 }
 
 model Order {
   @@map("orders")
 
+  /// Auto-generated UUID primary key
   id          String      @id @default(uuid())
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String      @map("user_id")
   status      OrderStatus @default(PENDING)
+  /// Auto-calculated total amount
   totalAmount Decimal     @db.Decimal(10, 2) @map("total_amount")
   orderItems  OrderItem[]
+  /// Auto-generated creation timestamp
   createdAt   DateTime    @default(now()) @map("created_at")
+  /// Auto-generated update timestamp
   updatedAt   DateTime    @updatedAt @map("updated_at")
 }
 
 model OrderItem {
   @@map("order_items")
 
+  /// Auto-generated UUID primary key
   id           String   @id @default(uuid())
   order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderId      String   @map("order_id")
   product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId    String   @map("product_id")
   quantity     Int
+  /// Auto-calculated price at time of order
   priceAtTime  Decimal  @db.Decimal(10, 2) @map("price_at_time")
+  /// Auto-generated creation timestamp
   createdAt    DateTime @default(now()) @map("created_at")
+  /// Auto-generated update timestamp
   updatedAt    DateTime @updatedAt @map("updated_at")
 }
 

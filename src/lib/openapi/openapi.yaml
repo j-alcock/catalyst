@@ -11,6 +11,7 @@ components:
       properties:
         id:
           type: string
+          description: Auto-generated UUID primary key
         name:
           type: string
         email:
@@ -30,9 +31,11 @@ components:
         createdAt:
           type: string
           format: date-time
+          description: Auto-generated creation timestamp
         updatedAt:
           type: string
           format: date-time
+          description: Auto-generated update timestamp
       required:
         - id
         - name
@@ -47,6 +50,7 @@ components:
       properties:
         id:
           type: string
+          description: Auto-generated UUID primary key
         type:
           type: string
         title:
@@ -66,9 +70,11 @@ components:
         createdAt:
           type: string
           format: date-time
+          description: Auto-generated creation timestamp
         updatedAt:
           type: string
           format: date-time
+          description: Auto-generated update timestamp
       required:
         - id
         - type
@@ -85,6 +91,7 @@ components:
       properties:
         id:
           type: string
+          description: Auto-generated UUID primary key
         name:
           type: string
         description:
@@ -96,9 +103,11 @@ components:
         createdAt:
           type: string
           format: date-time
+          description: Auto-generated creation timestamp
         updatedAt:
           type: string
           format: date-time
+          description: Auto-generated update timestamp
       required:
         - id
         - name
@@ -110,6 +119,7 @@ components:
       properties:
         id:
           type: string
+          description: Auto-generated UUID primary key
         name:
           type: string
         description:
@@ -131,9 +141,11 @@ components:
         createdAt:
           type: string
           format: date-time
+          description: Auto-generated creation timestamp
         updatedAt:
           type: string
           format: date-time
+          description: Auto-generated update timestamp
       required:
         - id
         - name
@@ -149,6 +161,7 @@ components:
       properties:
         id:
           type: string
+          description: Auto-generated UUID primary key
         user:
           $ref: "#/components/schemas/User"
         userId:
@@ -158,6 +171,7 @@ components:
         totalAmount:
           type: number
           format: double
+          description: Auto-calculated total amount
         orderItems:
           type: array
           items:
@@ -165,9 +179,11 @@ components:
         createdAt:
           type: string
           format: date-time
+          description: Auto-generated creation timestamp
         updatedAt:
           type: string
           format: date-time
+          description: Auto-generated update timestamp
       required:
         - id
         - user
@@ -182,6 +198,7 @@ components:
       properties:
         id:
           type: string
+          description: Auto-generated UUID primary key
         order:
           $ref: "#/components/schemas/Order"
         orderId:
@@ -196,12 +213,15 @@ components:
         priceAtTime:
           type: number
           format: double
+          description: Auto-calculated price at time of order
         createdAt:
           type: string
           format: date-time
+          description: Auto-generated creation timestamp
         updatedAt:
           type: string
           format: date-time
+          description: Auto-generated update timestamp
       required:
         - id
         - order

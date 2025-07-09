@@ -10,50 +10,50 @@ export const OrderStatusSchema = z.enum([
 ]);
 
 export const UserSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().uuid().describe("auto-generated"),
   name: z.string(),
   email: z.string().email(),
   picture: z.string(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z.string().datetime().describe("auto-generated"),
+  updatedAt: z.string().datetime().describe("auto-generated"),
 });
 
 export const CategorySchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().uuid().describe("auto-generated"),
   name: z.string(),
   description: z.string().nullable(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z.string().datetime().describe("auto-generated"),
+  updatedAt: z.string().datetime().describe("auto-generated"),
 });
 
 export const ProductSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().uuid().describe("auto-generated"),
   name: z.string(),
   description: z.string().nullable(),
   price: z.string(),
   stockQuantity: z.number().int().min(0),
   categoryId: z.string().uuid(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z.string().datetime().describe("auto-generated"),
+  updatedAt: z.string().datetime().describe("auto-generated"),
 });
 
 export const OrderItemSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().uuid().describe("auto-generated"),
   orderId: z.string().uuid(),
   productId: z.string().uuid(),
   quantity: z.number().int().positive(),
-  priceAtTime: z.string(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  priceAtTime: z.string().describe("auto-generated"),
+  createdAt: z.string().datetime().describe("auto-generated"),
+  updatedAt: z.string().datetime().describe("auto-generated"),
 });
 
 export const OrderSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().uuid().describe("auto-generated"),
   userId: z.string().uuid(),
   status: OrderStatusSchema,
-  totalAmount: z.string(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  totalAmount: z.string().describe("auto-generated"),
+  createdAt: z.string().datetime().describe("auto-generated"),
+  updatedAt: z.string().datetime().describe("auto-generated"),
 });
 
 // Schemas with relations
