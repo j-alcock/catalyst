@@ -285,6 +285,62 @@ console.log('Untested schemas:', detailedCoverage.schemas.untestedList);
 - **Quality assurance**: Ensure comprehensive API testing
 - **Documentation**: Coverage reports serve as API documentation
 
+## OpenAPI-Only Testing Suite
+
+In addition to the unified Zod+OpenAPI testing system, we also provide a pure OpenAPI-only testing suite that uses only OpenAPI schemas for validation.
+
+### Overview
+
+The OpenAPI-only tester (`openapi-only-dynamic-tester.ts`) provides:
+
+- **Pure OpenAPI validation**: Uses only OpenAPI schemas, no Zod dependencies
+- **JSON Schema validation**: Uses Ajv for JSON Schema validation
+- **Dynamic test generation**: Generates tests from OpenAPI specification
+- **Comprehensive coverage**: Tests all endpoints with OpenAPI schemas
+
+### Usage
+
+```bash
+# Run OpenAPI-only contract tests
+npm run test:openapi-only
+```
+
+### Programmatic Usage
+
+```typescript
+import { openAPIOnlyTester } from './openapi-only-dynamic-tester';
+
+// Run all OpenAPI-only contract tests
+const results = await openAPIOnlyTester.runAllContractTests();
+
+// Get results
+const summary = openAPIOnlyTester.getSummary();
+openAPIOnlyTester.printResults();
+```
+
+### Key Features
+
+- **Schema Resolution**: Automatically resolves OpenAPI schema references
+- **Test Data Generation**: Generates test data from OpenAPI property definitions
+- **JSON Schema Validation**: Uses Ajv for robust JSON Schema validation
+- **Business Logic Integration**: Applies business logic fixes to test data
+- **Coverage Tracking**: Tracks endpoint and schema coverage
+
+### Comparison with Unified Tester
+
+| Feature | Unified Tester | OpenAPI-Only Tester |
+|---------|----------------|---------------------|
+| Schema Source | Zod + OpenAPI | OpenAPI only |
+| Validation | Zod schemas | JSON Schema (Ajv) |
+| Test Types | Contract + Violation | Contract only |
+| Dependencies | Zod, OpenAPI | OpenAPI, Ajv |
+| Use Case | Full API testing | OpenAPI compliance |
+
+### When to Use
+
+- **Unified Tester**: When you want comprehensive testing with both contract and violation tests
+- **OpenAPI-Only Tester**: When you want to validate pure OpenAPI compliance without Zod dependencies
+
 ## Future Enhancements
 
 - **Custom test data generators**: Allow custom test data for specific fields

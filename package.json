@@ -28,10 +28,13 @@
     "test:unified": "tsx src/lib/testing/run-unified-tests.ts",
     "test:unified-contract": "tsx src/lib/testing/run-specific-tests.ts contract",
     "test:unified-violation": "tsx src/lib/testing/run-specific-tests.ts violation",
-    "test:unified-all": "tsx src/lib/testing/run-specific-tests.ts both"
+    "test:unified-all": "tsx src/lib/testing/run-specific-tests.ts both",
+    "test:openapi-only": "tsx src/lib/testing/run-openapi-only-tests.ts"
   },
   "lint-staged": {
-    "*.{ts,tsx}": ["biome check --write --no-errors-on-unmatched ./src"]
+    "*.{ts,tsx}": [
+      "biome check --write --no-errors-on-unmatched ./src"
+    ]
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.3.4",
@@ -51,6 +54,8 @@
     "@react-email/components": "0.0.33",
     "@tabler/icons-react": "3.21.0",
     "@tanstack/react-query": "5.76.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "class-variance-authority": "0.7.0",
     "clsx": "2.1.1",
     "dotenv": "^17.1.0",
