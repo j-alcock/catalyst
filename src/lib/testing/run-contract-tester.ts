@@ -1,98 +1,110 @@
 #!/usr/bin/env tsx
 
+import {
+  CategoriesResponseSchema,
+  ErrorResponseSchema,
+  OrdersResponseSchema,
+  PaginatedProductsResponseSchema,
+  ProductWithCategorySchema,
+} from "@/lib/schemas/zod-schemas";
 import { z } from "zod";
-import { contractTester } from "./contract-tester";
+import { ContractTester, contractTester } from "./contract-tester";
 
 async function main() {
   console.log("🔍 Starting Contract Tester...");
   console.log("💡 This verifies that API responses match expected schemas\n");
 
+  const baseUrl = process.env.API_BASE_URL || "http://localhost:3000";
+  console.log(`🌐 Testing against: ${baseUrl}`);
+
+  // Create a new instance with the correct base URL
+  const tester = new ContractTester(baseUrl);
+
   // Clear any previous results
-  contractTester.clearResults();
+  tester.clearResults();
 
   try {
-    // Sample schema for testing
-    const ProductSchema = z.object({
-      id: z.string(),
-      name: z.string(),
-      price: z.number(),
-      stockQuantity: z.number(),
-      categoryId: z.string(),
-    });
+    // Test 1: GET /api/products - should return paginated products
+    console.log("📋 Test 1: GET /api/products (Paginated Products)");
+    await tester.testEndpoint("/api/products", "GET", PaginatedProductsResponseSchema);
 
-    // Test 1: Valid product response validation
-    console.log("📋 Test 1: Valid Product Response");
-    const validProduct = {
-      id: "123",
-      name: "Test Product",
-      price: 29.99,
-      stockQuantity: 100,
-      categoryId: "cat-1",
-    };
+    // Test 2: GET /api/categories - should return categories array
+    console.log("📋 Test 2: GET /api/categories");
+    await tester.testEndpoint("/api/categories", "GET", CategoriesResponseSchema);
 
-    contractTester.validateResponse(
-      "/api/products/123",
-      "GET",
-      200,
-      validProduct,
-      ProductSchema
-    );
+    // Test 3: GET /api/orders - should return orders array
+    console.log("📋 Test 3: GET /api/orders");
+    await tester.testEndpoint("/api/orders", "GET", OrdersResponseSchema);
 
-    // Test 2: Valid error response validation
-    console.log("📋 Test 2: Valid Error Response");
-    const errorResponse = {
-      error: "Product not found",
-    };
-
-    contractTester.validateErrorResponse(
-      "/api/products/999",
-      "GET",
-      404,
-      errorResponse,
-      [400, 404, 409, 500]
-    );
-
-    // Test 3: Valid list response validation
-    console.log("📋 Test 3: Valid Product List Response");
-    const productList = {
-      data: [
-        {
-          id: "123",
-          name: "Product 1",
-          price: 29.99,
-          stockQuantity: 100,
-          categoryId: "cat-1",
-        },
-        {
-          id: "456",
-          name: "Product 2",
-          price: 49.99,
-          stockQuantity: 50,
-          categoryId: "cat-2",
-        },
-      ],
-      total: 2,
-    };
-
-    const ProductListSchema = z.object({
-      data: z.array(ProductSchema),
-      total: z.number(),
-    });
-
-    contractTester.validateResponse(
+    // Test 4: POST /api/products with invalid data - should return 400 error
+    console.log("📋 Test 4: POST /api/products (Invalid Data - Error Response)");
+    await tester.testEndpoint(
       "/api/products",
+      "POST",
+      ErrorResponseSchema,
+      {
+        name: "", // Invalid: empty name
+        price: -10, // Invalid: negative price
+        stockQuantity: 100,
+        categoryId: "invalid-category-id",
+      },
+      [400]
+    );
+
+    // Test 5: GET non-existent endpoint - should return 400 error (Next.js default)
+    console.log("📋 Test 5: GET /api/nonexistent (400 Error)");
+    await tester.testEndpoint(
+      "/api/nonexistent",
       "GET",
-      200,
-      productList,
-      ProductListSchema
+      z.union([ErrorResponseSchema, z.string()]), // Accept both object and string error responses
+      undefined,
+      [400]
+    );
+
+    // Test 6: GET /api/products with query parameters
+    console.log("📋 Test 6: GET /api/products?page=1&pageSize=5");
+    await tester.testEndpoint(
+      "/api/products?page=1&pageSize=5",
+      "GET",
+      PaginatedProductsResponseSchema
+    );
+
+    // Test 7: GET non-existent endpoints - should return proper error responses
+    console.log("📋 Test 7: GET /api/nonexistent-endpoint (400 Error)");
+    await tester.testEndpoint(
+      "/api/nonexistent-endpoint",
+      "GET",
+      z.union([ErrorResponseSchema, z.string()]), // Accept both object and string error responses
+      undefined,
+      [400]
+    );
+
+    // Test 8: GET invalid product ID - should return 400 error
+    console.log("📋 Test 8: GET /api/products/invalid-uuid (400 Error)");
+    await tester.testEndpoint(
+      "/api/products/invalid-uuid",
+      "GET",
+      z.union([ErrorResponseSchema, z.string()]),
+      undefined,
+      [400]
+    );
+
+    // Test 9: GET non-existent category - should return 404 error
+    console.log("📋 Test 9: GET /api/categories/non-existent (404 Error)");
+    await tester.testEndpoint(
+      "/api/categories/non-existent",
+      "GET",
+      z.union([ErrorResponseSchema, z.string()]),
+      undefined,
+      [404]
     );
 
     // Print results
-    contractTester.printResults();
+    tester.printResults();
 
     // Exit with appropriate code
-    const results = contractTester.getResults();
-    const failedTests = results.filter((r) => !r.success);
+    const results = tester.getResults();
+    const failedTests = results.filter((r: any) => !r.success);
 
     console.log("\n📊 Contract Test Summary:");
     console.log(`   Total tests run: ${results.length}`);

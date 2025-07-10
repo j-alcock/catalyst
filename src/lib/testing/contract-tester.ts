@@ -11,6 +11,82 @@ export interface ContractTestResult {
 
 export class ContractTester {
   private results: ContractTestResult[] = [];
+  private baseUrl: string;
+
+  constructor(baseUrl: string = "http://localhost:3000") {
+    this.baseUrl = baseUrl;
+  }
+
+  /**
+   * Make an HTTP request and validate the response
+   */
+  async testEndpoint<T>(
+    endpoint: string,
+    method: string = "GET",
+    schema: z.ZodSchema<T>,
+    body?: any,
+    expectedStatusCodes: number[] = [200, 201]
+  ): Promise<ContractTestResult> {
+    const startTime = Date.now();
+    const errors: string[] = [];
+
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const responseTime = Date.now() - startTime;
+      const responseData = await response.json();
+
+      // Check if status code is in expected range
+      if (!expectedStatusCodes.includes(response.status)) {
+        errors.push(
+          `Unexpected status code: ${response.status}. Expected one of: ${expectedStatusCodes.join(", ")}`
+        );
+      }
+
+      // Validate the response data against the schema
+      try {
+        schema.parse(responseData);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          errors.push(`Schema validation failed: ${error.message}`);
+          error.errors.forEach((err) => {
+            errors.push(`  - ${err.path.join(".")}: ${err.message}`);
+          });
+        } else {
+          errors.push(`Unexpected error: ${error}`);
+        }
+      }
+
+      const result: ContractTestResult = {
+        success: errors.length === 0,
+        endpoint,
+        method,
+        statusCode: response.status,
+        errors,
+        responseTime,
+      };
+
+      this.results.push(result);
+      return result;
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      const result: ContractTestResult = {
+        success: false,
+        endpoint,
+        method,
+        statusCode: 0,
+        errors: [`Request failed: ${error}`],
+        responseTime,
+      };
+
+      this.results.push(result);
+      return result;
+    }
+  }
 
   /**
    * Validate API response against a Zod schema

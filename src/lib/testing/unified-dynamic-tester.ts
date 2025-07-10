@@ -3696,16 +3696,24 @@ export class UnifiedDynamicTester {
   }
 
   /**
-   * Get all available schemas from OpenAPI spec
+   * Get all available schemas (both OpenAPI and Zod schemas)
    */
   private getAllAvailableSchemas(): string[] {
-    const schemas: string[] = [];
+    const schemas: Set<string> = new Set();
+
+    // Add OpenAPI schemas
     if (this.openAPISpec.components?.schemas) {
       for (const schemaName of Object.keys(this.openAPISpec.components.schemas)) {
-        schemas.push(schemaName);
+        schemas.add(schemaName);
       }
     }
-    return schemas;
+
+    // Add Zod schemas
+    for (const schemaName of Object.keys(this.availableSchemas)) {
+      schemas.add(schemaName);
+    }
+
+    return Array.from(schemas);
   }
 
   /**
