@@ -1,0 +1,112 @@
+name: Contract Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of tests to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - contract
+          - violation
+          - unified
+      environment:
+        description: 'Environment to run tests against'
+        required: true
+        default: 'local'
+        type: choice
+        options:
+          - local
+          - staging
+          - production
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup database
+        run: |
+          npm run db:generate
+          npm run db:push
+
+      - name: Generate OpenAPI spec
+        run: npm run generate:openapi
+
+      - name: Generate HeyAPI SDK
+        run: npm run generate:heyapi
+
+      - name: Run contract tests
+        run: |
+          echo "Running ${{ github.event.inputs.test_type }} tests in ${{ github.event.inputs.environment }} environment"
+          
+          case "${{ github.event.inputs.test_type }}" in
+            "all")
+              npm run test:unified-all
+              ;;
+            "contract")
+              npm run test:contract
+              ;;
+            "violation")
+              npm run test:violation
+              ;;
+            "unified")
+              npm run test:unified-contract
+              ;;
+            *)
+              echo "Unknown test type: ${{ github.event.inputs.test_type }}"
+              exit 1
+              ;;
+          esac
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-results
+          path: |
+            test-output/
+            *.log
+          retention-days: 7
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let testResults = 'Contract tests completed successfully! ✅';
+            
+            try {
+              // Try to read test output if available
+              if (fs.existsSync('test-output/')) {
+                const files = fs.readdirSync('test-output/');
+                if (files.length > 0) {
+                  testResults += '\n\nTest artifacts available in workflow run.';
+                }
+              }
+            } catch (error) {
+              console.log('Could not read test output:', error.message);
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: testResults
+            }); 
