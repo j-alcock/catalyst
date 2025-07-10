@@ -41,10 +41,11 @@ export async function GET(req: NextRequest) {
     const where: any = {};
     if (userId) where.userId = userId;
     if (status) where.status = status;
-    const orders = await prisma.order.findMany({
+    const orders = await (prisma as any).order.findMany({
       where,
       include: {
         user: true,
+        salesperson: true,
         orderItems: {
           include: {
             product: {

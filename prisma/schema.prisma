@@ -90,17 +90,19 @@ model Order {
   @@map("orders")
 
   /// Auto-generated UUID primary key
-  id          String      @id @default(uuid())
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String      @map("user_id")
-  status      OrderStatus @default(PENDING)
+  id            String        @id @default(uuid())
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String        @map("user_id")
+  salesperson   Salesperson?  @relation(fields: [salespersonId], references: [id], onDelete: SetNull)
+  salespersonId String?       @map("salesperson_id")
+  status        OrderStatus   @default(PENDING)
   /// Auto-calculated total amount
-  totalAmount Decimal     @db.Decimal(10, 2) @map("total_amount")
-  orderItems  OrderItem[]
+  totalAmount   Decimal       @db.Decimal(10, 2) @map("total_amount")
+  orderItems    OrderItem[]
   /// Auto-generated creation timestamp
-  createdAt   DateTime    @default(now()) @map("created_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
   /// Auto-generated update timestamp
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
 }
 
 model OrderItem {
@@ -119,6 +121,23 @@ model OrderItem {
   createdAt    DateTime @default(now()) @map("created_at")
   /// Auto-generated update timestamp
   updatedAt    DateTime @updatedAt @map("updated_at")
+}
+
+model Salesperson {
+  @@map("salespersons")
+
+  /// Auto-generated UUID primary key
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  phone       String?
+  commission  Decimal  @db.Decimal(5, 4) @default(0.0500) // 5% default commission rate
+  isActive    Boolean  @default(true) @map("is_active")
+  orders      Order[]
+  /// Auto-generated creation timestamp
+  createdAt   DateTime @default(now()) @map("created_at")
+  /// Auto-generated update timestamp
+  updatedAt   DateTime @updatedAt @map("updated_at")
 }
 
 enum OrderStatus {

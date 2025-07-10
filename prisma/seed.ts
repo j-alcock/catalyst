@@ -12,6 +12,7 @@ async function main() {
   await prisma.product.deleteMany();
   await prisma.category.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.salesperson.deleteMany();
 
   // Create Users
   console.log("👥 Creating users...");
@@ -38,6 +39,38 @@ async function main() {
         email: "bob.johnson@example.com",
         picture:
           "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+      },
+    }),
+  ]);
+
+  // Create Salespersons
+  console.log("👔 Creating salespersons...");
+  const salespersons = await Promise.all([
+    prisma.salesperson.create({
+      data: {
+        name: "Sarah Johnson",
+        email: "sarah.johnson@company.com",
+        phone: "+1-555-0101",
+        commission: 0.06, // 6%
+        isActive: true,
+      },
+    }),
+    prisma.salesperson.create({
+      data: {
+        name: "Michael Chen",
+        email: "michael.chen@company.com",
+        phone: "+1-555-0102",
+        commission: 0.05, // 5%
+        isActive: true,
+      },
+    }),
+    prisma.salesperson.create({
+      data: {
+        name: "Emily Rodriguez",
+        email: "emily.rodriguez@company.com",
+        phone: "+1-555-0103",
+        commission: 0.07, // 7%
+        isActive: true,
       },
     }),
   ]);
@@ -191,10 +224,11 @@ async function main() {
   // Create Orders
   console.log("🛒 Creating orders...");
   const orders = await Promise.all([
-    // Order 1: John's electronics order
+    // Order 1: John's electronics order (assigned to Sarah)
     prisma.order.create({
       data: {
         userId: users[0].id,
+        salespersonId: salespersons[0].id, // Sarah Johnson
         status: "PROCESSING",
         totalAmount: 1349.98, // iPhone + Headphones
         orderItems: {
@@ -213,10 +247,11 @@ async function main() {
         },
       },
     }),
-    // Order 2: Jane's clothing order
+    // Order 2: Jane's clothing order (assigned to Michael)
     prisma.order.create({
       data: {
         userId: users[1].id,
+        salespersonId: salespersons[1].id, // Michael Chen
         status: "SHIPPED",
         totalAmount: 219.98, // Shoes + Jeans
         orderItems: {
@@ -235,10 +270,11 @@ async function main() {
         },
       },
     }),
-    // Order 3: Bob's book order
+    // Order 3: Bob's book order (assigned to Emily)
     prisma.order.create({
       data: {
         userId: users[2].id,
+        salespersonId: salespersons[2].id, // Emily Rodriguez
         status: "DELIVERED",
         totalAmount: 149.97, // 3 books
         orderItems: {
@@ -262,10 +298,11 @@ async function main() {
         },
       },
     }),
-    // Order 4: John's home improvement order
+    // Order 4: John's home improvement order (no salesperson assigned)
     prisma.order.create({
       data: {
         userId: users[0].id,
+        // No salespersonId - demonstrates optional assignment
         status: "PENDING",
         totalAmount: 899.98, // Smart lights + Vacuum
         orderItems: {
@@ -289,6 +326,7 @@ async function main() {
   console.log("✅ Database seeding completed!");
   console.log(`📊 Created:`);
   console.log(`   - ${users.length} users`);
+  console.log(`   - ${salespersons.length} salespersons`);
   console.log(`   - ${categories.length} categories`);
   console.log(`   - ${products.length} products`);
   console.log(`   - ${orders.length} orders`);
@@ -296,6 +334,7 @@ async function main() {
   // Log some sample data for verification
   console.log("\n📋 Sample data:");
   console.log(`   Users: ${users.map((u) => u.name).join(", ")}`);
+  console.log(`   Salespersons: ${salespersons.map((s) => s.name).join(", ")}`);
   console.log(`   Categories: ${categories.map((c) => c.name).join(", ")}`);
   console.log(
     `   Products: ${products
@@ -304,6 +343,9 @@ async function main() {
       .join(", ")}...`
   );
   console.log(`   Orders: ${orders.length} orders with various statuses`);
+  console.log(
+    `   Orders with salespersons: ${orders.filter((o) => o.salespersonId).length}/${orders.length}`
+  );
 }
 
 main()

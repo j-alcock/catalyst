@@ -23,9 +23,7 @@
     "test:assignment": "tsx src/lib/testing/run-contract-tester.ts && tsx src/lib/testing/run-violation-tests.ts"
   },
   "lint-staged": {
-    "*.{ts,tsx}": [
-      "biome check --write --no-errors-on-unmatched ./src"
-    ]
+    "*.{ts,tsx}": ["biome check --write --no-errors-on-unmatched ./src"]
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.3.4",

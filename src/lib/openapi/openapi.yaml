@@ -166,6 +166,10 @@ components:
           $ref: "#/components/schemas/User"
         userId:
           type: string
+        salesperson:
+          $ref: "#/components/schemas/Salesperson"
+        salespersonId:
+          type: string
         status:
           $ref: "#/components/schemas/OrderStatus"
         totalAmount:
@@ -230,6 +234,44 @@ components:
         - productId
         - quantity
         - priceAtTime
+        - createdAt
+        - updatedAt
+    Salesperson:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Auto-generated UUID primary key
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        commission:
+          type: number
+          format: double
+        isActive:
+          type: boolean
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        createdAt:
+          type: string
+          format: date-time
+          description: Auto-generated creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Auto-generated update timestamp
+      required:
+        - id
+        - name
+        - email
+        - commission
+        - isActive
+        - orders
         - createdAt
         - updatedAt
     OrderStatus:
