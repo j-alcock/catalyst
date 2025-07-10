@@ -1,8 +1,24 @@
 #!/usr/bin/env tsx
 
 import { z } from "zod";
-import { schemas } from "../openapi-zod-client/zod-schemas";
-import { createContractFetch } from "./contract-validation";
+import {
+  zCategory,
+  zOrder,
+  zOrderItem,
+  zOrderStatus,
+  zProduct,
+  zUser,
+} from "../heyapi/zod.gen";
+
+// Create schemas object for compatibility
+const schemas = {
+  User: zUser,
+  Product: zProduct,
+  Category: zCategory,
+  Order: zOrder,
+  OrderItem: zOrderItem,
+  OrderStatus: zOrderStatus,
+};
 
 /**
  * Test contract validation with the new Zod schemas

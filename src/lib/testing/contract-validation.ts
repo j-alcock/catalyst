@@ -175,10 +175,18 @@ function handleValidationError(
   error: z.ZodError,
   context: "request" | "response",
   endpoint: string,
-  method: string
+  method: string,
+  isTestMode: boolean = false
 ): void {
   const isCI = process.env.CI === "true" || process.env.NODE_ENV === "test";
   const errorMessage = `[${context.toUpperCase()} CONTRACT VIOLATION] ${method} ${endpoint}: ${error.message}`;
+
+  // In test mode, we're running intentional negative tests, so don't treat these as errors
+  if (isTestMode) {
+    console.log(`[EXPECTED NEGATIVE TEST] ${errorMessage}`);
+    console.log("Validation details:", error.errors);
+    return;
+  }
 
   if (isCI) {
     throw new Error(errorMessage);
@@ -287,7 +295,12 @@ export const contractValidation = {
   /**
    * Validate request data against endpoint schema
    */
-  validateRequest: (endpoint: string, method: string, data: any): boolean => {
+  validateRequest: (
+    endpoint: string,
+    method: string,
+    data: any,
+    isTestMode: boolean = false
+  ): boolean => {
     const matchedEndpoint = matchEndpoint(endpoint);
     if (!matchedEndpoint) return true;
 
@@ -302,7 +315,7 @@ export const contractValidation = {
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        handleValidationError(error, "request", endpoint, method);
+        handleValidationError(error, "request", endpoint, method, isTestMode);
       }
       return false;
     }
@@ -311,7 +324,12 @@ export const contractValidation = {
   /**
    * Validate response data against endpoint schema
    */
-  validateResponse: (endpoint: string, method: string, data: any): boolean => {
+  validateResponse: (
+    endpoint: string,
+    method: string,
+    data: any,
+    isTestMode: boolean = false
+  ): boolean => {
     const matchedEndpoint = matchEndpoint(endpoint);
     if (!matchedEndpoint) return true;
 
@@ -326,7 +344,7 @@ export const contractValidation = {
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        handleValidationError(error, "response", endpoint, method);
+        handleValidationError(error, "response", endpoint, method, isTestMode);
       }
       return false;
     }
