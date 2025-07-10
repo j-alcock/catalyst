@@ -1,12 +1,12 @@
 #!/usr/bin/env tsx
 
 import {
-  CategoriesResponseSchema,
-  ErrorResponseSchema,
-  OrdersResponseSchema,
-  PaginatedProductsResponseSchema,
-  ProductWithCategorySchema,
-} from "@/lib/schemas/zod-schemas";
+  zError,
+  zGetApiCategoriesResponse,
+  zGetApiOrdersResponse,
+  zGetApiProductsResponse,
+  zProduct,
+} from "@/lib/heyapi/zod.gen";
 import { z } from "zod";
 import { ContractTester, contractTester } from "./contract-tester";
 
@@ -26,22 +26,22 @@ async function main() {
   try {
     // Test 1: GET /api/products - should return paginated products
     console.log("📋 Test 1: GET /api/products (Paginated Products)");
-    await tester.testEndpoint("/api/products", "GET", PaginatedProductsResponseSchema);
+    await tester.testEndpoint("/api/products", "GET", zGetApiProductsResponse);
 
     // Test 2: GET /api/categories - should return categories array
     console.log("📋 Test 2: GET /api/categories");
-    await tester.testEndpoint("/api/categories", "GET", CategoriesResponseSchema);
+    await tester.testEndpoint("/api/categories", "GET", zGetApiCategoriesResponse);
 
     // Test 3: GET /api/orders - should return orders array
     console.log("📋 Test 3: GET /api/orders");
-    await tester.testEndpoint("/api/orders", "GET", OrdersResponseSchema);
+    await tester.testEndpoint("/api/orders", "GET", zGetApiOrdersResponse);
 
     // Test 4: POST /api/products with invalid data - should return 400 error
     console.log("📋 Test 4: POST /api/products (Invalid Data - Error Response)");
     await tester.testEndpoint(
       "/api/products",
       "POST",
-      ErrorResponseSchema,
+      zError,
       {
         name: "", // Invalid: empty name
         price: -10, // Invalid: negative price
@@ -56,7 +56,7 @@ async function main() {
     await tester.testEndpoint(
       "/api/nonexistent",
       "GET",
-      z.union([ErrorResponseSchema, z.string()]), // Accept both object and string error responses
+      z.union([zError, z.string()]), // Accept both object and string error responses
       undefined,
       [400]
     );
@@ -66,7 +66,7 @@ async function main() {
     await tester.testEndpoint(
       "/api/products?page=1&pageSize=5",
       "GET",
-      PaginatedProductsResponseSchema
+      zGetApiProductsResponse
     );
 
     // Test 7: GET non-existent endpoints - should return proper error responses
@@ -74,7 +74,7 @@ async function main() {
     await tester.testEndpoint(
       "/api/nonexistent-endpoint",
       "GET",
-      z.union([ErrorResponseSchema, z.string()]), // Accept both object and string error responses
+      z.union([zError, z.string()]), // Accept both object and string error responses
       undefined,
       [400]
     );
@@ -84,7 +84,7 @@ async function main() {
     await tester.testEndpoint(
       "/api/products/invalid-uuid",
       "GET",
-      z.union([ErrorResponseSchema, z.string()]),
+      z.union([zError, z.string()]),
       undefined,
       [400]
     );
@@ -94,7 +94,7 @@ async function main() {
     await tester.testEndpoint(
       "/api/categories/non-existent",
       "GET",
-      z.union([ErrorResponseSchema, z.string()]),
+      z.union([zError, z.string()]),
       undefined,
       [404]
     );

@@ -20,7 +20,13 @@
     "test:unified-contract": "tsx src/lib/testing/run-specific-tests.ts contract",
     "test:unified-violation": "tsx src/lib/testing/run-specific-tests.ts violation",
     "test:unified-all": "tsx src/lib/testing/run-specific-tests.ts both",
-    "test:assignment": "tsx src/lib/testing/run-contract-tester.ts && tsx src/lib/testing/run-violation-tests.ts"
+    "test:assignment": "tsx src/lib/testing/run-contract-tester.ts && tsx src/lib/testing/run-violation-tests.ts",
+    "test:heyapi-contract": "tsx src/lib/heyapi/test-contract-validation.ts",
+    "test:heyapi-dynamic": "tsx src/lib/heyapi/run-dynamic-contract-tests.ts",
+    "generate:zod": "npx openapi-zod-client ./src/lib/openapi/openapi.yaml -o ./src/lib/openapi-zod-client/zod-schemas.ts --export-schemas",
+    "generate:openapi": "prisma generate",
+    "generate:heyapi": "npx @hey-api/openapi-ts -f heyapi.config.ts",
+    "test:contract": "npm run generate:zod && npm run test:heyapi-dynamic"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -28,6 +34,7 @@
     ]
   },
   "dependencies": {
+    "@anatine/zod-mock": "^3.14.0",
     "@asteasolutions/zod-to-openapi": "^7.3.4",
     "@aws-sdk/client-ses": "3.758.0",
     "@next/third-parties": "15.2.3",
@@ -80,6 +87,7 @@
     "@types/supertest": "^6.0.3",
     "husky": "9.1.4",
     "lint-staged": "15.2.7",
+    "openapi-zod-client": "^1.18.3",
     "postcss": "8",
     "prisma-openapi": "^1.3.3",
     "react-email": "3.0.7",

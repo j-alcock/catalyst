@@ -1,169 +1,147 @@
-# Catalyst Assignment Testing Suite
+# Catalyst Starter Kit
 
-This repository is a fork of the Catalyst Starter Kit, focused on robust API contract and violation testing for the SDET assignment.
+A modern, full-stack web application starter kit built with Next.js, Prisma, and TypeScript.
 
-## Overview
+## Features
 
-This project demonstrates a comprehensive approach to API contract validation and negative (violation) testing. The test suites are designed to:
+- **Next.js 15** with App Router and Turbopack
+- **Prisma** for database management with auto-generated OpenAPI specs
+- **TypeScript** for type safety
+- **Tailwind CSS** for styling
+- **NextAuth.js** for authentication
+- **Stripe** for payments
+- **Comprehensive Testing** with dynamic contract and violation tests
+- **Auto-generated Zod Schemas** from OpenAPI specifications
 
-- **Contract Tests**: Ensure your API responses match the OpenAPI specification and Zod schemas, including correct error handling for all endpoints.
-- **Violation Tests**: Intentionally break the contract to verify that your testing framework detects violations (missing fields, wrong types, extra fields, etc.).
-- **Unified Dynamic Tests**: Dynamically generate and run tests for all endpoints and variations, providing a single, unified view of contract compliance and coverage.
+## Quick Start
 
-## SDET Assignment Analysis
+1. **Clone and install dependencies:**
+   ```bash
+   git clone <repository-url>
+   cd catalyst
+   npm install
+   ```
 
-### ✅ **COMPLETE SUCCESS - All Requirements Met**
+2. **Set up environment variables:**
+   ```bash
+   cp .env.example .env.local
+   # Edit .env.local with your configuration
+   ```
 
-#### **Checkpoint 1 (Day 1 End) - ✅ FULLY COMPLETED**
+3. **Set up the database:**
+   ```bash
+   npm run migrate
+   npm run seed
+   ```
 
-**Working E-commerce API with Prisma ORM**
-- ✅ Complete Prisma Schema: All required models implemented (`User`, `Product`, `Category`, `Order`, `OrderItem`)
-- ✅ Proper Relationships: Foreign keys, cascading deletes, and associations correctly defined
-- ✅ Database Seeding: Comprehensive seeding script with realistic test data (12 products, 4 categories, 3 users, 4 orders)
+4. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
 
-**Generated OpenAPI Specification**
-- ✅ prisma-openapi Integration: OpenAPI spec automatically generated from Prisma schema
-- ✅ Complete Endpoint Coverage: All required endpoints implemented with proper HTTP methods
-- ✅ Proper Request/Response Structures: All endpoints have correct request/response schemas
+## Schema Generation and Contract Testing
 
-#### **Final Submission (Day 2 End) - ✅ FULLY COMPLETED**
+This project uses a modern approach to API validation and testing with auto-generated Zod schemas from OpenAPI specifications.
 
-**Complete Contract Testing Framework**
-- ✅ HeyAPI Client Generation: Fully integrated with Zod plugin for type-safe API calls
-- ✅ Zod Schema Validation: Comprehensive schema validation for all endpoints
-- ✅ Comprehensive Test Suite: Covers all endpoints with both positive and negative test cases
-- ✅ Functional CI Pipeline: GitHub Actions workflow for automated testing
+### Workflow
 
-**Bonus Points - Violation Testing**
-- ✅ Separate Violation Test Suite: Demonstrates contract-breaking scenarios
-- ✅ Proper Failure Detection: Tests correctly fail when contracts are broken
-- ✅ Comprehensive Coverage: Tests missing fields, wrong types, extra fields, and incorrect status codes
+1. **Generate OpenAPI spec from Prisma schema:**
+   ```bash
+   npm run generate:openapi
+   ```
 
-### **Current Test Coverage Status**
+2. **Generate Zod schemas from OpenAPI:**
+   ```bash
+   npm run generate:zod
+   ```
 
-#### **Endpoint Coverage: 100%** ✅
-All 8 required endpoints are implemented and tested:
-- `GET /api/products` - List products
-- `GET /api/products/[id]` - Get single product
-- `POST /api/products` - Create product
-- `PUT /api/products/[id]` - Update product
-- `DELETE /api/products/[id]` - Delete product
-- `GET /api/categories` - List categories
-- `GET /api/orders` - List orders
-- `GET /api/orders/[id]` - Get single order
+3. **Run contract tests:**
+   ```bash
+   npm run test:contract
+   ```
 
-#### **Schema Coverage: 31.3%** ⚠️
-**Tested Schemas (10):**
-- `CreateProductSchema` - Product creation validation
-- `UpdateProductSchema` - Product update validation
-- `CreateCategorySchema` - Category creation validation
-- `UpdateCategorySchema` - Category update validation
-- `CreateOrderSchema` - Order creation validation
-- `UpdateOrderSchema` - Order update validation
-- `CreateUserSchema` - User creation validation
-- `UpdateUserSchema` - User update validation
-- `CreateOrderItemSchema` - Order item creation validation
-- `UpdateOrderItemSchema` - Order item update validation
+### Available Scripts
 
-**Untested Schemas (22):**
-- **Response Schemas (3):** `CategoriesResponseSchema`, `OrdersResponseSchema`, `ProductsResponseSchema`
-- **Detailed Entity Schemas (4):** `CategorySchema`, `ProductSchema`, `OrderSchema`, `UserSchema`
-- **Composite Schemas (4):** `CategoryWithProductsSchema`, `ProductWithCategorySchema`, `OrderWithItemsSchema`, `OrderWithUserSchema`
-- **Error Schemas (3):** `ErrorResponseSchema`, `ValidationErrorSchema`, `NotFoundErrorSchema`
-- **Pagination Schemas (2):** `PaginatedResponseSchema`, `PaginationMetaSchema`
-- **Filter/Sort Schemas (6):** `ProductFiltersSchema`, `OrderFiltersSchema`, `SortOptionsSchema`, `SearchQuerySchema`, `DateRangeSchema`, `PriceRangeSchema`
+- `npm run generate:openapi` - Generate OpenAPI spec from Prisma schema
+- `npm run generate:zod` - Generate Zod schemas from OpenAPI spec
+- `npm run test:contract` - Run complete contract testing workflow
+- `npm run test:heyapi-contract` - Test HeyAPI contract validation
+- `npm run test:heyapi-dynamic` - Run dynamic contract tests with generated schemas
 
-#### **Test Results**
-- **Contract Tests:** ✅ All 9/9 tests pass
-- **Violation Tests:** ✅ All 8/8 tests correctly detect violations
-- **Unified Dynamic Tests:** ✅ Comprehensive coverage with detailed reporting
+### Architecture
 
-### **Technical Implementation Highlights**
+- **Prisma Schema** → **OpenAPI Spec** → **Zod Schemas** → **API Validation**
+- All API routes use auto-generated schemas for request/response validation
+- Dynamic contract tests validate API responses against generated schemas
+- Violation tests ensure proper error handling
 
-**Dynamic Schema Discovery**
-- Automatically discovers all Zod schemas from `src/lib/schemas/zod-schemas.ts`
-- Dynamically generates tests based on actual API structure
-- No hardcoded test data - all tests use real schemas and endpoints
+## Testing
 
-**Robust Error Handling**
-- Tests both success cases (2xx responses) and error cases (4xx/5xx responses)
-- Validates error response structures match expected schemas
-- Ensures proper HTTP status codes for different scenarios
+The project includes comprehensive testing infrastructure:
 
-**CI/CD Ready**
-- All tests designed to run in automated environments
-- Clear pass/fail criteria for build pipelines
-- Comprehensive reporting and coverage metrics
+### Contract Tests
+- Validate API responses match OpenAPI specifications
+- Use auto-generated Zod schemas for validation
+- Dynamic test generation from OpenAPI spec
 
-## Running Assignment Contract and Violation Tests
+### Violation Tests
+- Test error handling and validation
+- Ensure proper HTTP status codes
+- Validate error response schemas
 
-### Prerequisites
-- Node.js (v18+ recommended)
-- npm (or compatible package manager)
-- Database and API server running (see project setup for details)
+### Unified Testing
+- `npm run test:unified-contract` - Run contract tests only
+- `npm run test:unified-violation` - Run violation tests only
+- `npm run test:unified-all` - Run both test types
 
-### Run All Assignment Tests
+## Database
 
-```bash
-npm run test:assignment
-```
-This will run both the contract and violation test suites in sequence:
-- **Contract tests**: Should all pass if your API is compliant.
-- **Violation tests**: Should all fail (i.e., detect violations), demonstrating the framework's effectiveness.
+The project uses Prisma with PostgreSQL. Key commands:
 
-### Run Only Contract Tests
-```bash
-npx tsx src/lib/testing/run-contract-tester.ts
-```
+- `npm run migrate` - Run database migrations
+- `npm run seed` - Seed the database with sample data
+- `npm run generate:openapi` - Generate OpenAPI spec from Prisma schema
 
-### Run Only Violation Tests
-```bash
-npx tsx src/lib/testing/run-violation-tests.ts
-```
+## API Endpoints
 
-## Unified Dynamic Tests
+All API endpoints are automatically documented in the OpenAPI specification and validated using generated Zod schemas:
 
-The project also supports unified dynamic contract and violation testing, which:
-- Automatically discovers all endpoints and variations from your OpenAPI spec and Zod schemas
-- Dynamically generates and runs both positive (contract) and negative (violation) tests
-- Provides a unified report of coverage and contract compliance
+- `/api/users` - User management
+- `/api/products` - Product catalog
+- `/api/categories` - Product categories
+- `/api/orders` - Order management
+- `/api/stripe` - Payment processing
 
-### Run Unified Dynamic Tests
-```bash
-npm run test:unified
-```
-- `npm run test:unified-contract` — Only contract (positive) tests
-- `npm run test:unified-violation` — Only violation (negative) tests
-- `npm run test:unified-all` — Both contract and violation tests
+## Development
 
-For detailed documentation on the unified dynamic testing system, see [`src/lib/testing/README.md`](src/lib/testing/README.md).
+### Code Quality
+- `npm run lint-check` - Run linting
+- `npm run format` - Format code
+- `npm run type-check` - TypeScript type checking
 
-## Testing Philosophy & Structure
+### Database
+- `npm run migrate` - Create and apply migrations
+- `npm run seed` - Seed with sample data
 
-- **Contract tests** verify that all API endpoints and variations return responses matching the OpenAPI spec and Zod schemas, including correct error handling for invalid input and non-existent endpoints.
-- **Violation tests** are designed to always fail, by intentionally sending/expecting invalid data, missing fields, wrong types, or incorrect status codes. This ensures your contract testing framework is actually catching real-world contract violations.
-- **Unified dynamic tests** provide a scalable, spec-driven approach to test generation and coverage analysis, ensuring your API remains robust as it evolves.
+## Deployment
 
-## Project Structure (Testing Focus)
+1. **Build the application:**
+   ```bash
+   npm run build
+   ```
 
-- `src/lib/testing/run-contract-tester.ts` — Runs assignment contract tests
-- `src/lib/testing/run-violation-tests.ts` — Runs assignment violation tests
-- `src/lib/testing/unified-dynamic-tester.ts` — Runs unified dynamic contract/violation tests
-- `src/lib/testing/contract-tester.ts` — Core contract testing logic
-- `src/lib/testing/contract-violation-tests.ts` — Core violation test suite
+2. **Start the production server:**
+   ```bash
+   npm start
+   ```
 
-## CI/CD Integration
+## Contributing
 
-The test suites are designed to run in CI/CD (see `.github/workflows/assignment.yml`).
-- Contract tests must pass for a build to succeed.
-- Violation tests must detect violations (i.e., fail as expected) to demonstrate framework effectiveness.
+1. Follow the existing code style and patterns
+2. Ensure all tests pass before submitting
+3. Update OpenAPI specs when adding new endpoints
+4. Use generated Zod schemas for validation
 
-## Minimal Project Setup
+## License
 
-This fork is focused on testing. For full application setup, see the original Catalyst Starter Kit documentation.
-
----
-
-**For assignment and unified dynamic contract testing, use the commands above.**
-
-For questions or to extend the test framework, see the code in `src/lib/testing/`.
+MIT License - see LICENSE file for details.

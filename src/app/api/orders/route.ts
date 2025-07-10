@@ -1,6 +1,6 @@
+import { zGetApiOrdersData, zPostApiOrdersData } from "@/lib/heyapi/zod.gen";
 import { serializePrismaObject, toDecimal } from "@/lib/prisma-utils";
 import prisma from "@/lib/prisma/prisma";
-import { CreateOrderRequestSchema, OrdersQuerySchema } from "@/lib/schemas/zod-schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 
@@ -21,10 +21,10 @@ export async function GET(req: NextRequest) {
     if (value !== null) queryData[key] = value;
   }
 
-  // Validate query parameters FIRST
+  // Validate query parameters FIRST using generated schema
   let queryValidation;
   try {
-    queryValidation = OrdersQuerySchema.parse(queryData);
+    queryValidation = zGetApiOrdersData.shape.query?.parse(queryData) || {};
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -37,10 +37,11 @@ export async function GET(req: NextRequest) {
 
   // Only call Prisma if all validation passes
   try {
-    const { userId, status } = queryValidation;
+    const { userId } = queryValidation;
     const where: any = {};
     if (userId) where.userId = userId;
-    if (status) where.status = status;
+    // Note: status filtering removed as it's not in the generated schema
+    // Add it to your OpenAPI spec if needed
     const orders = await prisma.order.findMany({
       where,
       include: {
@@ -76,8 +77,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
   }
 
-  // Validate input with Zod
-  const validationResult = CreateOrderRequestSchema.safeParse(body);
+  // Validate input with Zod using generated schema
+  const validationResult = zPostApiOrdersData.shape.body.safeParse(body);
   if (!validationResult.success) {
     return NextResponse.json(
       { error: "Missing or invalid required fields" },

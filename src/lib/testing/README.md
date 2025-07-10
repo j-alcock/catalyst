@@ -171,8 +171,60 @@ const tester = new UnifiedDynamicTester('http://localhost:3001');
 ### OpenAPI Spec Path
 The system expects your OpenAPI spec at `src/lib/openapi/api-spec.yaml`.
 
-### Zod Schemas
-The system automatically discovers all Zod schemas exported from `src/lib/schemas/zod-schemas.ts`.
+### Zod Schema Generation
+
+The project now uses **OpenAPI-Zod-Client** to automatically generate Zod schemas from the OpenAPI specification, ensuring perfect alignment between your API contract and validation schemas.
+
+#### Generation Workflow
+
+```bash
+# Generate OpenAPI spec from Prisma schema
+npm run generate:openapi
+
+# Generate Zod schemas from OpenAPI spec
+npm run generate:zod
+
+# Generate HeyAPI SDK (optional, for client-side usage)
+npm run generate:heyapi
+
+# Run contract tests with generated schemas
+npm run test:contract
+```
+
+#### Generated Files
+
+- **`src/lib/openapi-zod-client/zod-schemas.ts`**: Auto-generated Zod schemas from OpenAPI spec
+- **`src/lib/heyapi/`**: HeyAPI SDK with TypeScript types and client code
+- **`src/lib/openapi/openapi.yaml`**: Auto-generated OpenAPI specification
+
+#### Schema Usage
+
+```typescript
+import { schemas } from '../openapi-zod-client/zod-schemas';
+
+// Use generated schemas for validation
+const productValidation = schemas.Product.safeParse(productData);
+
+// Create request schemas (without auto-generated fields)
+const productRequestSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  price: z.number(),
+  stockQuantity: z.number().int(),
+  categoryId: z.string(),
+});
+```
+
+#### Benefits
+
+- **Perfect Alignment**: Schemas are generated directly from your OpenAPI spec
+- **Type Safety**: Full TypeScript support with generated types
+- **Automatic Updates**: Schemas update when your API changes
+- **No Drift**: Eliminates manual schema maintenance
+- **Contract Testing**: Enables comprehensive contract validation
+
+### Legacy Zod Schemas
+The system also supports legacy Zod schemas exported from `src/lib/schemas/zod-schemas.ts` for backward compatibility.
 
 ## Troubleshooting
 

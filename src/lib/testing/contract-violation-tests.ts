@@ -1,10 +1,6 @@
 #!/usr/bin/env tsx
 
-import {
-  OrderStatusSchema,
-  PaginatedProductsResponseSchema,
-  ProductSchema,
-} from "@/lib/schemas/zod-schemas";
+import { zOrderStatus, zProduct } from "@/lib/heyapi/zod.gen";
 import { z } from "zod";
 import { contractTester } from "./contract-tester";
 

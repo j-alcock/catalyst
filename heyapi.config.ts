@@ -7,7 +7,7 @@ export default defineConfig({
     "zod",
     {
       name: "@hey-api/sdk",
-      validator: true,
+      validator: false,
     },
   ],
 });

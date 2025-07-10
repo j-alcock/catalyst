@@ -1,8 +1,5 @@
+import { zGetApiCategoriesData, zPostApiCategoriesData } from "@/lib/heyapi/zod.gen";
 import prisma from "@/lib/prisma/prisma";
-import {
-  CategoriesQuerySchema,
-  CreateCategoryRequestSchema,
-} from "@/lib/schemas/zod-schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 
@@ -23,26 +20,11 @@ export async function GET(req: NextRequest) {
     if (value !== null) queryData[key] = value;
   }
 
-  const queryValidation = CategoriesQuerySchema.safeParse(queryData);
-  if (!queryValidation.success) {
-    return NextResponse.json(
-      { error: "Invalid query parameters", details: queryValidation.error.errors },
-      { status: 400 }
-    );
-  }
+  // Note: zGetApiCategoriesData doesn't have query params, so we skip validation
+  // If you need query validation, add it to your OpenAPI spec
 
   try {
-    const { search } = queryValidation.data;
-    const where: any = {};
-
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ];
-    }
-
-    const categories = await prisma.category.findMany({ where });
+    const categories = await prisma.category.findMany();
     return NextResponse.json(categories);
   } catch (_error) {
     return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });
@@ -59,8 +41,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Validate input with Zod
-    const validationResult = CreateCategoryRequestSchema.safeParse(body);
+    // Validate input with Zod using generated schema
+    const validationResult = zPostApiCategoriesData.shape.body.safeParse(body);
     if (!validationResult.success) {
       return NextResponse.json(
         { error: "Validation failed", details: validationResult.error.errors },

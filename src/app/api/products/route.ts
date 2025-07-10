@@ -1,10 +1,6 @@
+import { zGetApiProductsData, zPostApiProductsData } from "@/lib/heyapi/zod.gen";
 import { serializePrismaObject, toDecimal } from "@/lib/prisma-utils";
 import prisma from "@/lib/prisma/prisma";
-import {
-  CreateProductRequestSchema,
-  PaginationQuerySchema,
-  ProductsQuerySchema,
-} from "@/lib/schemas/zod-schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 
@@ -19,22 +15,21 @@ import { ZodError, z } from "zod";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 
-  // Validate query parameters
+  // Validate query parameters using generated schema
   const queryData: any = {};
   for (const [key, value] of searchParams.entries()) {
     if (value !== null) queryData[key] = value;
   }
 
-  const queryValidation =
-    PaginationQuerySchema.merge(ProductsQuerySchema).safeParse(queryData);
-  if (!queryValidation.success) {
+  const queryValidation = zGetApiProductsData.shape.query?.safeParse(queryData);
+  if (!queryValidation?.success) {
     return NextResponse.json(
-      { error: "Invalid query parameters", details: queryValidation.error.errors },
+      { error: "Invalid query parameters", details: queryValidation?.error.errors },
       { status: 400 }
     );
   }
 
-  const { page, pageSize, ..._filterParams } = queryValidation.data;
+  const { page, pageSize } = queryValidation.data || { page: 1, pageSize: 10 };
   const skip = (page - 1) * pageSize;
 
   try {
@@ -63,8 +58,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Remove the local schema since we're importing it
-
 export async function POST(req: NextRequest) {
   // Parse JSON first
   let body;
@@ -74,25 +67,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
   }
 
-  // Debug: Log the schema and body
-  console.log("Schema:", CreateProductRequestSchema);
-  console.log("Body:", JSON.stringify(body, null, 2));
-
-  // Validate input with Zod FIRST
+  // Validate input with Zod FIRST using generated schema
   let validationResult;
   try {
-    validationResult = CreateProductRequestSchema.parse(body);
-    console.log("Validation PASSED:", validationResult);
+    validationResult = zPostApiProductsData.shape.body.parse(body);
   } catch (error: any) {
-    console.log("Validation FAILED:", error);
     if (error instanceof z.ZodError) {
-      console.log("Returning 400 for ZodError");
       return NextResponse.json(
         { error: "Missing or invalid required fields", details: error.errors },
         { status: 400 }
       );
     }
-    console.log("Returning 400 for validation failed");
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
   }
 

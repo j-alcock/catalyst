@@ -43,34 +43,6 @@ import type {
   PutApiProductsByIdErrors,
   PutApiProductsByIdResponses,
 } from "./types.gen";
-import {
-  zGetApiCategoriesByIdData,
-  zGetApiCategoriesByIdResponse,
-  zGetApiCategoriesData,
-  zGetApiCategoriesResponse,
-  zGetApiOrdersByIdData,
-  zGetApiOrdersByIdResponse,
-  zGetApiOrdersData,
-  zGetApiOrdersResponse,
-  zGetApiProductsByIdData,
-  zGetApiProductsByIdResponse,
-  zGetApiProductsData,
-  zGetApiProductsResponse,
-  zGetApiUsersByIdData,
-  zGetApiUsersByIdResponse,
-  zPostApiCategoriesData,
-  zPostApiCategoriesResponse,
-  zPostApiOrdersData,
-  zPostApiOrdersResponse,
-  zPostApiProductsData,
-  zPostApiProductsResponse,
-  zPostApiUsersData,
-  zPostApiUsersResponse,
-  zPutApiOrdersByIdStatusData,
-  zPutApiOrdersByIdStatusResponse,
-  zPutApiProductsByIdData,
-  zPutApiProductsByIdResponse,
-} from "./zod.gen";
 
 export type Options<
   TData extends TDataShape = TDataShape,
@@ -101,12 +73,6 @@ export const getApiProducts = <ThrowOnError extends boolean = false>(
     GetApiProductsErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zGetApiProductsData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zGetApiProductsResponse.parseAsync(data);
-    },
     url: "/api/products",
     ...options,
   });
@@ -124,12 +90,6 @@ export const postApiProducts = <ThrowOnError extends boolean = false>(
     PostApiProductsErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zPostApiProductsData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zPostApiProductsResponse.parseAsync(data);
-    },
     url: "/api/products",
     ...options,
     headers: {
@@ -151,12 +111,6 @@ export const getApiProductsById = <ThrowOnError extends boolean = false>(
     GetApiProductsByIdErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zGetApiProductsByIdData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zGetApiProductsByIdResponse.parseAsync(data);
-    },
     url: "/api/products/{id}",
     ...options,
   });
@@ -174,12 +128,6 @@ export const putApiProductsById = <ThrowOnError extends boolean = false>(
     PutApiProductsByIdErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zPutApiProductsByIdData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zPutApiProductsByIdResponse.parseAsync(data);
-    },
     url: "/api/products/{id}",
     ...options,
     headers: {
@@ -201,12 +149,6 @@ export const getApiCategories = <ThrowOnError extends boolean = false>(
     GetApiCategoriesErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zGetApiCategoriesData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zGetApiCategoriesResponse.parseAsync(data);
-    },
     url: "/api/categories",
     ...options,
   });
@@ -224,12 +166,6 @@ export const postApiCategories = <ThrowOnError extends boolean = false>(
     PostApiCategoriesErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zPostApiCategoriesData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zPostApiCategoriesResponse.parseAsync(data);
-    },
     url: "/api/categories",
     ...options,
     headers: {
@@ -251,12 +187,6 @@ export const getApiCategoriesById = <ThrowOnError extends boolean = false>(
     GetApiCategoriesByIdErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zGetApiCategoriesByIdData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zGetApiCategoriesByIdResponse.parseAsync(data);
-    },
     url: "/api/categories/{id}",
     ...options,
   });
@@ -274,12 +204,6 @@ export const getApiOrders = <ThrowOnError extends boolean = false>(
     GetApiOrdersErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zGetApiOrdersData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zGetApiOrdersResponse.parseAsync(data);
-    },
     url: "/api/orders",
     ...options,
   });
@@ -297,12 +221,6 @@ export const postApiOrders = <ThrowOnError extends boolean = false>(
     PostApiOrdersErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zPostApiOrdersData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zPostApiOrdersResponse.parseAsync(data);
-    },
     url: "/api/orders",
     ...options,
     headers: {
@@ -324,12 +242,6 @@ export const getApiOrdersById = <ThrowOnError extends boolean = false>(
     GetApiOrdersByIdErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zGetApiOrdersByIdData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zGetApiOrdersByIdResponse.parseAsync(data);
-    },
     url: "/api/orders/{id}",
     ...options,
   });
@@ -347,12 +259,6 @@ export const putApiOrdersByIdStatus = <ThrowOnError extends boolean = false>(
     PutApiOrdersByIdStatusErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zPutApiOrdersByIdStatusData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zPutApiOrdersByIdStatusResponse.parseAsync(data);
-    },
     url: "/api/orders/{id}/status",
     ...options,
     headers: {
@@ -374,12 +280,6 @@ export const postApiUsers = <ThrowOnError extends boolean = false>(
     PostApiUsersErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zPostApiUsersData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zPostApiUsersResponse.parseAsync(data);
-    },
     url: "/api/users",
     ...options,
     headers: {
@@ -401,12 +301,6 @@ export const getApiUsersById = <ThrowOnError extends boolean = false>(
     GetApiUsersByIdErrors,
     ThrowOnError
   >({
-    requestValidator: async (data) => {
-      return await zGetApiUsersByIdData.parseAsync(data);
-    },
-    responseValidator: async (data) => {
-      return await zGetApiUsersByIdResponse.parseAsync(data);
-    },
     url: "/api/users/{id}",
     ...options,
   });

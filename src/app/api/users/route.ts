@@ -1,5 +1,5 @@
+import { zPostApiUsersData } from "@/lib/heyapi/zod.gen";
 import prisma from "@/lib/prisma/prisma";
-import { CreateUserRequestSchema } from "@/lib/schemas/zod-schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   // Validate input with Zod FIRST
   let validationResult;
   try {
-    validationResult = CreateUserRequestSchema.parse(body);
+    validationResult = zPostApiUsersData.shape.body.parse(body);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

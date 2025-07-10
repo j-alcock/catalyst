@@ -1,0 +1,6 @@
+[2025-07-10T21:39:29.270Z] Error: missing input - which OpenAPI specification should we use to generate your output?
+Stack:
+Error: missing input - which OpenAPI specification should we use to generate your output?
+    at Jc (/Volumes/Exine/revvy/dev/catalyst/node_modules/@hey-api/openapi-ts/dist/index.cjs:36:106975)
+    at async RD (/Volumes/Exine/revvy/dev/catalyst/node_modules/@hey-api/openapi-ts/dist/index.cjs:1338:4492)
+    at async start (/Volumes/Exine/revvy/dev/catalyst/node_modules/@hey-api/openapi-ts/bin/index.cjs:131:21)

@@ -3,8 +3,22 @@ import path from "path";
 import yaml from "js-yaml";
 import { z } from "zod";
 
-// Dynamically import all schemas from the zod-schemas file
-import * as ZodSchemas from "../schemas/zod-schemas";
+// Import generated schemas instead of hand-written ones
+import {
+  zCategory,
+  zError,
+  zOrder,
+  zOrderItem,
+  zOrderStatus,
+  zPostApiCategoriesData,
+  zPostApiOrdersData,
+  zPostApiProductsData,
+  zPostApiUsersData,
+  zProduct,
+  zPutApiOrdersByIdStatusData,
+  zPutApiProductsByIdData,
+  zUser,
+} from "../heyapi/zod.gen";
 
 export interface ViolationTestConfig {
   endpoint: string;
@@ -57,18 +71,24 @@ export class DynamicViolationTester {
   }
 
   /**
-   * Automatically discover all Zod schemas from the schemas file
+   * Automatically discover all Zod schemas from the generated schemas
    */
   private discoverZodSchemas(): Record<string, z.ZodSchema<any>> {
-    const schemas: Record<string, z.ZodSchema<any>> = {};
-
-    // Iterate through all exports from the ZodSchemas module
-    for (const [name, schema] of Object.entries(ZodSchemas)) {
-      // Only include actual Zod schemas (not types or other exports)
-      if (schema && typeof schema === "object" && "_def" in schema) {
-        schemas[name] = schema as z.ZodSchema<any>;
-      }
-    }
+    const schemas: Record<string, z.ZodSchema<any>> = {
+      zUser,
+      zProduct,
+      zCategory,
+      zOrder,
+      zOrderItem,
+      zOrderStatus,
+      zError,
+      zPostApiProductsData: zPostApiProductsData.shape.body,
+      zPostApiCategoriesData: zPostApiCategoriesData.shape.body,
+      zPostApiUsersData: zPostApiUsersData.shape.body,
+      zPostApiOrdersData: zPostApiOrdersData.shape.body,
+      zPutApiOrdersByIdStatusData: zPutApiOrdersByIdStatusData.shape.body,
+      zPutApiProductsByIdData: zPutApiProductsByIdData.shape.body,
+    };
 
     console.log(
       `🔍 Discovered ${Object.keys(schemas).length} Zod schemas:`,

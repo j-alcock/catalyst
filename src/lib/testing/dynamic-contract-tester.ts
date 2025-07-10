@@ -3,22 +3,21 @@ import path from "path";
 import yaml from "js-yaml";
 import { z } from "zod";
 import {
-  CategorySchema,
-  CreateCategoryRequestSchema,
-  CreateOrderRequestSchema,
-  CreateProductRequestSchema,
-  CreateUserRequestSchema,
-  ErrorResponseSchema,
-  OrderSchema,
-  OrderStatusSchema,
-  OrderWithItemsSchema,
-  PaginatedProductsResponseSchema,
-  ProductSchema,
-  ProductWithCategorySchema,
-  UpdateOrderStatusRequestSchema,
-  UpdateProductRequestSchema,
-  UserSchema,
-} from "../schemas/zod-schemas";
+  zCategory,
+  zError,
+  zGetApiProductsResponse,
+  zOrder,
+  zOrderItem,
+  zOrderStatus,
+  zPostApiCategoriesData,
+  zPostApiOrdersData,
+  zPostApiProductsData,
+  zPostApiUsersData,
+  zProduct,
+  zPutApiOrdersByIdStatusData,
+  zPutApiProductsByIdData,
+  zUser,
+} from "../heyapi/zod.gen";
 
 export interface OpenAPISpec {
   openapi: string;
@@ -37,17 +36,6 @@ export interface OpenAPISpec {
   };
 }
 
-export interface EndpointDefinition {
-  path: string;
-  method: string;
-  summary: string;
-  description: string;
-  tags: string[];
-  parameters?: any[];
-  requestBody?: any;
-  responses: Record<string, any>;
-}
-
 export interface DynamicTestConfig {
   endpoint: string;
   method: string;
@@ -60,13 +48,14 @@ export interface DynamicTestConfig {
 }
 
 export interface DynamicTestResult {
-  success: boolean;
   endpoint: string;
   method: string;
   statusCode: number;
+  responseTime: number;
+  success: boolean;
   errors: string[];
-  responseTime?: number;
-  testType: string;
+  schemaValidation: boolean;
+  data?: any;
 }
 
 export class DynamicContractTester {
@@ -95,33 +84,105 @@ export class DynamicContractTester {
   }
 
   /**
-   * Load all Zod schemas
+   * Load all Zod schemas from generated file
    */
   private loadZodSchemas(): Record<string, z.ZodSchema<any>> {
     return {
-      User: UserSchema,
-      Category: CategorySchema,
-      Product: ProductSchema,
-      Order: OrderSchema,
-      ProductWithCategory: ProductWithCategorySchema,
-      OrderWithItems: OrderWithItemsSchema,
-      CreateProductRequest: CreateProductRequestSchema,
-      UpdateProductRequest: UpdateProductRequestSchema,
-      CreateCategoryRequest: CreateCategoryRequestSchema,
-      CreateUserRequest: CreateUserRequestSchema,
-      CreateOrderRequest: CreateOrderRequestSchema,
-      UpdateOrderStatusRequest: UpdateOrderStatusRequestSchema,
-      PaginatedProductsResponse: PaginatedProductsResponseSchema,
-      ErrorResponse: ErrorResponseSchema,
-      OrderStatus: OrderStatusSchema,
+      User: zUser,
+      Category: zCategory,
+      Product: zProduct,
+      Order: zOrder,
+      OrderItem: zOrderItem,
+      OrderStatus: zOrderStatus,
+      Error: zError,
+      GetApiProductsResponse: zGetApiProductsResponse,
+      PostApiProductsData: zPostApiProductsData.shape.body,
+      PostApiCategoriesData: zPostApiCategoriesData.shape.body,
+      PostApiUsersData: zPostApiUsersData.shape.body,
+      PostApiOrdersData: zPostApiOrdersData.shape.body,
+      PutApiOrdersByIdStatusData: zPutApiOrdersByIdStatusData.shape.body,
+      PutApiProductsByIdData: zPutApiProductsByIdData.shape.body,
     };
+  }
+
+  /**
+   * Map OpenAPI schema references to Zod schemas
+   */
+  private mapSchemaReference(ref: string): z.ZodSchema<any> | null {
+    // Extract schema name from reference (e.g., "#/components/schemas/Product" -> "Product")
+    const schemaName = ref.split("/").pop();
+    if (schemaName && this.zodSchemas[schemaName]) {
+      return this.zodSchemas[schemaName];
+    }
+    return null;
+  }
+
+  /**
+   * Get schema for endpoint based on path and method
+   */
+  private getSchemaForEndpoint(path: string, method: string): z.ZodSchema<any> | null {
+    // Map common patterns to schemas
+    if (path === "/api/products" && method === "GET") {
+      return zGetApiProductsResponse;
+    }
+
+    if (path.includes("/products") && method === "GET") {
+      return zProduct;
+    }
+
+    if (path.includes("/categories") && method === "GET") {
+      return z.array(zCategory);
+    }
+
+    if (path.includes("/orders") && method === "GET") {
+      return z.array(zOrder);
+    }
+
+    if (path.includes("/users") && method === "GET") {
+      return zUser;
+    }
+
+    // Default to any schema for unknown patterns
+    return z.any();
+  }
+
+  /**
+   * Map inline OpenAPI schemas to Zod schemas
+   */
+  private mapInlineSchemaToZod(
+    schema: any,
+    path: string,
+    method: string
+  ): z.ZodSchema<any> | null {
+    // Simple mapping based on path and method patterns
+    if (path.includes("/products") && method === "GET") {
+      if (schema.properties?.data) {
+        return zGetApiProductsResponse;
+      }
+      return zProduct;
+    }
+
+    if (path.includes("/categories") && method === "GET") {
+      return z.array(zCategory);
+    }
+
+    if (path.includes("/orders") && method === "GET") {
+      return z.array(zOrder);
+    }
+
+    if (path.includes("/users") && method === "GET") {
+      return zUser;
+    }
+
+    // Default to any schema for unknown patterns
+    return z.any();
   }
 
   /**
    * Extract endpoint definitions from OpenAPI spec
    */
-  private extractEndpoints(): EndpointDefinition[] {
-    const endpoints: EndpointDefinition[] = [];
+  private extractEndpoints(): any[] {
+    const endpoints: any[] = [];
 
     for (const [path, methods] of Object.entries(this.openAPISpec.paths)) {
       for (const [method, definition] of Object.entries(methods)) {
@@ -144,21 +205,9 @@ export class DynamicContractTester {
   }
 
   /**
-   * Map OpenAPI schema references to Zod schemas
-   */
-  private mapSchemaReference(ref: string): z.ZodSchema<any> | null {
-    // Extract schema name from reference (e.g., "#/components/schemas/Product" -> "Product")
-    const schemaName = ref.split("/").pop();
-    if (schemaName && this.zodSchemas[schemaName]) {
-      return this.zodSchemas[schemaName];
-    }
-    return null;
-  }
-
-  /**
    * Generate test configuration for an endpoint
    */
-  private generateTestConfig(endpoint: EndpointDefinition): DynamicTestConfig {
+  private generateTestConfig(endpoint: any): DynamicTestConfig {
     const config: DynamicTestConfig = {
       endpoint: endpoint.path,
       method: endpoint.method,
@@ -195,7 +244,7 @@ export class DynamicContractTester {
     for (const [statusCode, response] of Object.entries(endpoint.responses)) {
       const code = parseInt(statusCode);
       if (code >= 200 && code < 300) {
-        const responseSchema = response.content?.["application/json"]?.schema;
+        const responseSchema = (response as any).content?.["application/json"]?.schema;
         if (responseSchema?.$ref) {
           config.responseSchema = this.mapSchemaReference(responseSchema.$ref);
         } else if (responseSchema) {
@@ -210,7 +259,7 @@ export class DynamicContractTester {
     }
 
     // Map error response schema
-    config.errorSchema = ErrorResponseSchema;
+    config.errorSchema = zError;
 
     // Generate test data
     config.testData = this.generateTestData(
@@ -220,38 +269,6 @@ export class DynamicContractTester {
     );
 
     return config;
-  }
-
-  /**
-   * Map inline OpenAPI schemas to Zod schemas
-   */
-  private mapInlineSchemaToZod(
-    schema: any,
-    path: string,
-    method: string
-  ): z.ZodSchema<any> | null {
-    // Simple mapping based on path and method patterns
-    if (path.includes("/products") && method === "GET") {
-      if (schema.properties?.data) {
-        return PaginatedProductsResponseSchema;
-      }
-      return ProductWithCategorySchema;
-    }
-
-    if (path.includes("/categories") && method === "GET") {
-      return z.array(CategorySchema);
-    }
-
-    if (path.includes("/orders") && method === "GET") {
-      return z.array(OrderWithItemsSchema);
-    }
-
-    if (path.includes("/users") && method === "GET") {
-      return z.array(UserSchema);
-    }
-
-    // Default to any schema for unknown patterns
-    return z.any();
   }
 
   /**
@@ -266,7 +283,7 @@ export class DynamicContractTester {
 
     // Generate sample data based on schema type
     try {
-      if (schema === CreateProductRequestSchema) {
+      if (schema === zPostApiProductsData.shape.body) {
         return {
           name: "Test Product",
           description: "A test product for contract testing",
@@ -276,14 +293,14 @@ export class DynamicContractTester {
         };
       }
 
-      if (schema === CreateCategoryRequestSchema) {
+      if (schema === zPostApiCategoriesData.shape.body) {
         return {
           name: "Test Category",
           description: "A test category for contract testing",
         };
       }
 
-      if (schema === CreateUserRequestSchema) {
+      if (schema === zPostApiUsersData.shape.body) {
         return {
           name: "Test User",
           email: "test@example.com",
@@ -291,7 +308,7 @@ export class DynamicContractTester {
         };
       }
 
-      if (schema === CreateOrderRequestSchema) {
+      if (schema === zPostApiOrdersData.shape.body) {
         return {
           userId: "550e8400-e29b-41d4-a716-446655440000",
           orderItems: [
@@ -303,7 +320,7 @@ export class DynamicContractTester {
         };
       }
 
-      if (schema === UpdateOrderStatusRequestSchema) {
+      if (schema === zPutApiOrdersByIdStatusData.shape.body) {
         return {
           status: "PROCESSING",
         };
@@ -388,26 +405,27 @@ export class DynamicContractTester {
       }
 
       return {
-        success: errors.length === 0,
         endpoint: config.endpoint,
         method: config.method,
         statusCode: response.status,
-        errors,
         responseTime,
-        testType: "dynamic",
+        success: errors.length === 0,
+        errors,
+        schemaValidation: errors.length === 0,
+        data: parsedData,
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;
       errors.push(`Request failed: ${error}`);
 
       return {
-        success: false,
         endpoint: config.endpoint,
         method: config.method,
         statusCode: 0,
-        errors,
         responseTime,
-        testType: "dynamic",
+        success: false,
+        errors,
+        schemaValidation: false,
       };
     }
   }

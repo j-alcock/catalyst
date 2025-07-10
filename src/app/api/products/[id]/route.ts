@@ -1,6 +1,6 @@
+import { zPutApiProductsByIdData } from "@/lib/heyapi/zod.gen";
 import { serializePrismaObject, toDecimal } from "@/lib/prisma-utils";
 import prisma from "@/lib/prisma/prisma";
-import { UpdateProductRequestSchema } from "@/lib/schemas/zod-schemas";
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 
@@ -73,10 +73,10 @@ export async function PUT(
     return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
   }
 
-  // Validate input with Zod FIRST
+  // Validate input with Zod FIRST using generated schema
   let updateData;
   try {
-    updateData = UpdateProductRequestSchema.parse(body);
+    updateData = zPutApiProductsByIdData.shape.body.parse(body);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
